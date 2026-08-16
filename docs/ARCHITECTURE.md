@@ -57,8 +57,104 @@ _Arrives with phase 4, alongside the authentication dependency it describes._
 
 ## Tenancy enforcement
 
-_Arrives with phase 2, alongside the repository layer it describes._
+One practice seeing another practice's patients is the worst bug this product could have. Three
+independent mechanisms guard against it, and it is worth being precise about which one is load
+bearing.
+
+### 1. Repository-level scoping — the primary control
+
+Every repository over a tenant-owned table extends `OrganizationScopedRepository`
+([`app/repositories/base.py`](../apps/api/app/repositories/base.py)) and takes `organization_id`
+as the **required first argument of every method**.
+
+The usual defence — "remember to add `.where(organization_id == ...)`" — fails the first time
+somebody writes a query in a hurry, and it fails silently. Making the scope a required first
+parameter converts that mistake into a `TypeError` at the call site, before the process even
+reaches the database.
+
+Subclasses never build a `select()` from scratch. They start from `_scoped_select()`, which
+already carries the filter, so there is exactly one line in the codebase that defines what
+"belongs to this organization" means.
+
+Two supporting details:
+
+* **`add()` overwrites the entity's `organization_id`** with the scope it was called under. A
+  service that builds an object from request data and forgets to strip a client-supplied
+  organization cannot persist it — the scope argument wins.
+* **`get_by_id()` returns `None` across tenants** rather than raising something distinguishable.
+  An attacker holding a real ID from another practice gets a 404, indistinguishable from a
+  record that does not exist, so the endpoint leaks nothing even in its error behaviour.
+
+### 2. The structural test
+
+`test_every_public_method_takes_organization_id_first` walks each repository class with
+`inspect` and asserts the signature rule holds. It covers methods nobody has written a
+behavioural test for yet — including one added six months from now.
+
+It found a genuine leak the first time it ran: a `flush()` passthrough on the base class took no
+scope. Rather than allowlist it, the method was removed. Services already hold the session, and
+deciding *when* to flush is a service concern anyway.
+
+There is exactly one allowlisted exception:
+`UserRepository.get_by_auth_user_id`. It is the bootstrap step —
+
+```
+JWT.sub  →  users.auth_user_id  →  users.organization_id
+```
+
+— and cannot take an organization as input, because the organization is precisely what it exists
+to discover.
+
+### 3. Row-level security — the second net
+
+Every tenant table has RLS enabled with a policy keyed on
+`current_setting('app.current_organization_id', true)::uuid`.
+
+This is **not** the primary control, and treating it as one would be a mistake. RLS is enabled
+but not `FORCE`d, so the table owner — which is the role the API connects as — is exempt. Normal
+requests are unaffected by these policies.
+
+What they guard is everything that does not go through our code: a Supabase Studio session, a
+future role granted direct table access, or a deployment that runs the app as a non-owner. The
+policy's `USING`/`WITH CHECK` pair also means a scoped connection cannot *write* a row belonging
+to another organization, not just read one.
+
+Note the failure direction: `current_setting(..., true)` returns `NULL` when unset, and `NULL`
+equals nothing, so a connection that has not declared an organization sees **zero** rows.
+Forgetting the scope denies access rather than granting it.
+
+`tests/test_rls_policies.py` proves this end to end by creating a throwaway role inside the test
+transaction and watching rows appear and disappear as the session variable changes. Catalog
+inspection alone would only prove a policy is *installed*, not that its expression is right.
 
 ## Status state machine
 
 _Arrives with phase 3, alongside `RecallService`._
+
+## Notes on the schema
+
+A few decisions in the data model are not obvious from reading the tables.
+
+**`public_id` on patients.** Twelve characters of Crockford base32 (60 bits), excluding `I`, `L`,
+`O`, and `U` so an ID can be read aloud or copied off a screen without ambiguity. It is the only
+patient identifier that ever appears in a URL or an API response (SPEC §4.2).
+
+**The reminder idempotency index.** `UNIQUE (patient_id, reminder_rule_id, due_date_snapshot)`
+is what makes the reminder job safe to run twice. `due_date_snapshot` is in the key for a subtle
+reason: without it, a patient who completes a visit and rolls forward to next year's due date
+would be permanently blocked from another 30-day reminder, because one already exists for that
+rule. Recording which due date the reminder was computed against makes each annual cycle its own
+slot.
+
+**The manual-send carve-out.** `reminder_rule_id` is nullable, and Postgres does not treat two
+`NULL`s as equal in a unique index. So a manual "Send Reminder" can never collide with a
+rule-driven event — which is what stops the live demo beat from raising a duplicate-key error in
+front of a clinic owner.
+
+**Currency is `NUMERIC`, never a float.** In binary floating point `0.1 + 0.2` is not `0.3`, and
+an office manager checking a revenue figure by hand will notice a cent.
+
+**Enum types must be dropped explicitly on downgrade.** Alembic's autogenerate creates native
+enum types on the way up but only emits `DROP TABLE` on the way down, leaving orphaned types that
+make the next `upgrade head` fail. The initial migration drops all eight explicitly, and
+`tests/test_migrations.py` fails if a newly added enum is not covered.

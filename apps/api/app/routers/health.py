@@ -16,9 +16,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, status
 
 from app.core.config import settings
+from app.core.database import check_database_connection
 
 router = APIRouter(tags=["system"])
 
@@ -37,9 +38,20 @@ def health() -> dict[str, Any]:
 
 
 @router.get("/ready", summary="Readiness check")
-def ready() -> dict[str, Any]:
-    """Report whether the API can reach its dependencies.
+def ready(response: Response) -> dict[str, Any]:
+    """Report whether the API can actually serve traffic.
 
-    The database check lands in phase 2, together with the session factory it needs.
+    Returns 503 rather than 200 when the database is unreachable. That distinction is the whole
+    point of having a second endpoint: if the app is not working, ``/health`` says the process is
+    alive and this says the database behind it is not — which is the first thing worth knowing
+    when something is wrong five minutes before a demo.
     """
-    return {"status": "ok", "database": "not yet wired (phase 2)"}
+    database_ok = check_database_connection()
+
+    if not database_ok:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {
+        "status": "ok" if database_ok else "degraded",
+        "database": "connected" if database_ok else "unreachable",
+    }

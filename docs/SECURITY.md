@@ -56,14 +56,56 @@ Set in `apps/web/next.config.mjs` for every route:
 | `Permissions-Policy` | Explicitly declines camera, microphone, geolocation, payment, and USB access. |
 | `Strict-Transport-Security` | Inert on localhost, required once deployed over HTTPS. |
 
+### Tenant isolation (phase 2)
+
+The primary control is **repository-level scoping**: `organization_id` is a required first
+argument on every method of every repository over a tenant-owned table. A forgotten scope is a
+`TypeError` at the call site rather than a silent data leak. A structural test walks the
+repository classes and fails if any public method lacks it — that test found and removed a real
+leak (an unscoped `flush()` passthrough) the first time it ran.
+
+**Row-level security** is enabled on all seven tenant tables as a second net, with policies keyed
+on `current_setting('app.current_organization_id', true)::uuid`.
+
+Being precise about what RLS does and does not do here, because it is easy to overstate:
+
+* RLS is enabled but **not** `FORCE`d. In Postgres a table's owner is exempt from its policies
+  unless `FORCE` is set, and the API connects as the owner — so these policies do not affect
+  normal application requests. That is the arrangement SPEC §3.2 describes.
+* What they protect is every path that does **not** go through the application: a Supabase Studio
+  session, a future role granted direct table access, or a deployment running as a non-owner
+  role (which is what a real production deployment should do).
+* Supabase's `anon` and `authenticated` roles are granted **no** access to these tables at all,
+  so PostgREST cannot reach patient data even before RLS is consulted. Patient data is served
+  exclusively by the FastAPI backend.
+* The failure direction is correct: an unset session variable yields `NULL`, `NULL` equals
+  nothing, and the connection sees zero rows. Forgetting the scope denies access rather than
+  granting it.
+
+`tests/test_rls_policies.py` proves the policies actually filter, by creating a throwaway role
+inside the test transaction and watching rows appear and disappear as the organization variable
+changes. Inspecting the catalog alone would only show that a policy exists — a policy of
+`USING (true)` would look perfectly healthy there and protect nothing.
+
+### Data minimisation (phase 2)
+
+`activity_events.payload` is restricted by convention *and* by documentation at the point of
+writing: it may hold identifiers, initials, enum values, counts, and dates — never names, email
+addresses, or phone numbers (SPEC §9). The activity feed renders readable sentences by joining to
+the live patient row at display time, so the log itself carries nothing sensitive.
+
+This matters because an audit table is the one most likely to be exported, shipped to a log
+aggregator, or retained long after the record it describes has been deleted.
+
+Patient identifiers in URLs are opaque `public_id` values, never database keys — so a bookmarked
+URL leaks neither the row's identity nor how many patients a practice has.
+
 ## Controls still to come
 
 | Control | Phase |
 |---------|-------|
 | Supabase JWT verification via cached JWKS; `iss` / `aud` / `exp` validation | 4 |
 | Server-side `organization_id` resolution (never accepted from the client) | 4 |
-| Row-level security policies as defence in depth | 2 |
-| Repository-level org scoping as the primary tenancy control | 2 |
 | CORS restricted to the configured web origin | 4 |
 | Rate limiting on auth, import, and send-reminder endpoints | 4 |
 | Error envelope with correlation IDs; no stack traces to clients | 4 |

@@ -30,11 +30,14 @@ def test_health_declares_synthetic_data() -> None:
     assert "synthetic" in body["data"].lower()
 
 
-def test_ready_returns_ok() -> None:
+def test_ready_reports_the_database_is_reachable() -> None:
+    """Requires the local Supabase stack to be running — see tests/conftest.py."""
     response = client.get("/ready")
 
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["database"] == "connected"
 
 
 def test_no_hipaa_compliance_claim_in_api_description() -> None:
