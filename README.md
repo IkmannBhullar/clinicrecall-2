@@ -1,0 +1,205 @@
+# ClinicRecall
+
+**Reduce missed annual visits.** ClinicRecall identifies which of a practice's patients are due
+for their annual appointment and sends them professional email reminders — then tracks what
+happened, so the clinic can see the appointments it recovered.
+
+> **Demo data only.** Every patient record in this project is synthetic. Nothing here is, or
+> claims to be, HIPAA compliant. See [`docs/SECURITY.md`](docs/SECURITY.md) for what a real
+> healthcare deployment would additionally require.
+
+---
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Screenshots](#screenshots)
+- [Stack](#stack)
+- [Repository structure](#repository-structure)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Running the app](#running-the-app)
+- [Common commands](#common-commands)
+- [Documentation](#documentation)
+- [Build status](#build-status)
+
+---
+
+## What it does
+
+The whole product is one loop:
+
+```
+upload a CSV of patients
+        ↓
+the system works out who is due for their annual visit
+        ↓
+reminder emails are scheduled and sent
+        ↓
+staff see the activity and mark appointments as scheduled
+        ↓
+the visit is marked completed
+        ↓
+the next annual due date is recalculated automatically
+```
+
+Anything not on the path from "upload CSV" to "revenue recovered" is deliberately out of scope.
+There are no charts, diagnoses, prescriptions, billing, or scheduling features here, and there
+will not be.
+
+## Screenshots
+
+_Generated automatically by the Playwright suite into `docs/screenshots/` — arrives in phase 11._
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js (App Router), React 19, TypeScript (strict), Tailwind v4, shadcn/ui, lucide-react |
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2.x (typed), Pydantic v2, Alembic |
+| Database | PostgreSQL 17 (inside the local Supabase stack) |
+| Auth | Supabase Auth (GoTrue), run locally in Docker — real JWTs, real JWKS verification |
+| Email | Pluggable provider; a fully functional mock is the default (no paid service, no network) |
+| Tooling | pnpm 9 workspaces, uv, Makefile, ruff, mypy, ESLint, pytest, Playwright |
+
+Everything runs locally. There is no cloud dependency and no runtime network access, which is a
+hard requirement: this gets demonstrated in clinics, on guest wifi that is frequently
+captive-portalled or blocked.
+
+## Repository structure
+
+```
+.
+├── Makefile              ← start here; every workflow has a target
+├── apps/
+│   ├── api/              ← FastAPI backend
+│   │   ├── app/
+│   │   │   ├── routers/       HTTP layer: parse, authorise, delegate
+│   │   │   ├── services/      domain rules (no HTTP, no SQL)
+│   │   │   ├── repositories/  database queries (org-scoped)
+│   │   │   ├── models/        SQLAlchemy tables
+│   │   │   ├── schemas/       Pydantic request/response types
+│   │   │   ├── email/         rendering + delivery providers
+│   │   │   ├── jobs/          the reminder processor
+│   │   │   └── core/          config, database, security
+│   │   └── tests/
+│   └── web/              ← Next.js frontend
+│       └── src/
+│           ├── app/           routes (App Router)
+│           ├── components/    UI
+│           └── lib/           helpers
+├── docs/
+│   ├── SPEC.md           ← the build contract
+│   ├── ARCHITECTURE.md   ← module boundaries and the status state machine
+│   ├── SECURITY.md       ← every security control and its rationale
+│   ├── DEMO_SCRIPT.md    ← the literal talk track for a clinic demo
+│   └── samples/          ← example CSVs for the import flow
+├── scripts/              ← setup, verification, and demo utilities
+└── supabase/             ← local Supabase stack configuration
+```
+
+## Prerequisites
+
+You need four things installed. The Supabase CLI is **not** in this list — `make setup` installs
+a pinned copy for you.
+
+| Tool | Version | Check it | If you need it |
+|------|---------|----------|----------------|
+| Docker | any recent | `docker info` | [Docker Desktop](https://www.docker.com/products/docker-desktop/) — **must be running** |
+| Node.js | 20 LTS | `node -v` | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
+| pnpm | 9.x | `pnpm -v` | `npm install -g pnpm@9` |
+| uv | latest | `uv --version` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+
+You do **not** need Python 3.12 installed — `uv` downloads and manages the right interpreter
+itself, regardless of what Python is already on your machine.
+
+> **Start Docker Desktop before you run anything.** The database and the auth server run in
+> containers. If Docker is not running you will get a clear error telling you so, but it is
+> quicker to start it now.
+
+## Setup
+
+From a clean clone, two commands:
+
+```bash
+make setup
+```
+
+This installs the Supabase CLI, creates your `.env`, installs Python and Node dependencies,
+starts the local Supabase containers, and applies the database migrations. The first run
+downloads several container images and can take a few minutes; later runs take seconds.
+
+Then load the demo data:
+
+```bash
+make seed
+```
+
+## Running the app
+
+```bash
+make dev
+```
+
+That starts everything and prints where to find it:
+
+| | URL |
+|---|---|
+| Web app | http://localhost:3000 |
+| API docs | http://127.0.0.1:8000/docs |
+| Supabase Studio (browse the database) | http://127.0.0.1:54323 |
+
+Press `Ctrl-C` to stop. The Supabase containers keep running in the background; stop those too
+with `make supabase-stop`.
+
+**Demo credentials** are created by the seed script and documented here in phase 7.
+
+## Common commands
+
+Run `make` on its own to see the full list. The ones you will actually use:
+
+| Command | What it does |
+|---------|--------------|
+| `make setup` | One-time install and database preparation |
+| `make dev` | Start the whole stack |
+| `make seed` | Load the demo data (safe to run repeatedly) |
+| `make demo-reset` | Wipe changes and restore pristine demo data, in under 30 seconds |
+| `make test` | Run the Python test suite |
+| `make lint` | Run every linter and formatter in check mode |
+| `make fmt` | Auto-fix formatting |
+| `make typecheck` | Run mypy and the TypeScript compiler |
+| `make verify` | Run every quality gate — this is the definition of done |
+
+`make verify` is the one that matters. It exits 0 only when the migrations apply cleanly, the
+seed is idempotent, all linters and type checkers pass, every test passes, the Playwright
+walkthrough of the demo completes without a console error, and no server-side secret has leaked
+into the browser bundle.
+
+## Documentation
+
+| Document | What is in it |
+|----------|---------------|
+| [`docs/SPEC.md`](docs/SPEC.md) | The build contract — what this product is and is not |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module boundaries, request lifecycle, tenancy, status state machine |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Every security control, why it exists, and what it does not cover |
+| [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) | The talk track for demoing to a clinic owner |
+
+## Build status
+
+This project is being built in twelve phases. Each phase lands as a single commit with its own
+tests passing.
+
+| Phase | | |
+|-------|---|---|
+| 1 | Foundation and toolchain | ✅ |
+| 2 | Schema, migrations, and tenancy | ⬜ |
+| 3 | RecallService domain core | ⬜ |
+| 4 | Authentication and security | ⬜ |
+| 5 | ReminderService | ⬜ |
+| 6 | CSV import | ⬜ |
+| 7 | Seed data and demo reset | ⬜ |
+| 8 | Web foundation and app shell | ⬜ |
+| 9 | Dashboard and Patients | ⬜ |
+| 10 | Reminders, Activity, Settings, Import UI | ⬜ |
+| 11 | End-to-end verification | ⬜ |
+| 12 | Documentation | ⬜ |

@@ -1,0 +1,41 @@
+# --- Secrets -----------------------------------------------------------------
+# Only .env.example is ever tracked. Real env files never enter git history.
+.env
+.env.*
+!.env.example
+
+# --- Python ------------------------------------------------------------------
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node / Next.js ----------------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.playwright/
+
+# --- Supabase ----------------------------------------------------------------
+# The CLI writes local stack state here. Config (supabase/config.toml) IS tracked.
+supabase/.temp/
+supabase/.branches/
+
+# --- Repo-local tooling ------------------------------------------------------
+# scripts/install-supabase-cli.sh drops a pinned binary here during `make setup`.
+.tools/
+
+# --- OS / editor -------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

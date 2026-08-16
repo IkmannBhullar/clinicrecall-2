@@ -1,0 +1,12 @@
+{
+  // Suggested (never required) editor extensions. VS Code offers these when the project is
+  // first opened. Everything here has a command-line equivalent in the Makefile, so nothing in
+  // the build depends on any of them being installed.
+  "recommendations": [
+    "charliermarsh.ruff",              // Python linting and formatting, matching `make lint`
+    "ms-python.mypy-type-checker",     // inline type errors, matching `make typecheck`
+    "dbaeumer.vscode-eslint",          // TypeScript linting, matching `pnpm lint`
+    "bradlc.vscode-tailwindcss",       // Tailwind class autocomplete and hover previews
+    "ms-playwright.playwright"         // run and debug the end-to-end demo walkthrough
+  ]
+}

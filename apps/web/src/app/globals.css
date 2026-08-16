@@ -1,0 +1,173 @@
+/* =============================================================================================
+   ClinicRecall — global styles and design tokens.
+
+   Tailwind v4 is configured from CSS rather than a JavaScript file. The `@theme` block below IS
+   the design system: every colour, radius, and font used by the app is named here, and Tailwind
+   generates the matching utility classes (`bg-surface`, `text-muted`, `rounded-card`, ...).
+
+   The palette follows SPEC section 10: premium B2B healthcare SaaS — calm, trustworthy, high
+   contrast, restrained. Deliberately absent: gradients, neon, heavy shadows, animation.
+
+   ---------------------------------------------------------------------------------------------
+   HOW TO USE THESE TOKENS  (read this before adding a class — the wrong form fails silently)
+
+   Tailwind v4 generates a utility for every token, named after its namespace:
+
+       --color-ink        →  text-ink, bg-ink, border-ink
+       --radius-card      →  rounded-card
+       --shadow-card      →  shadow-card
+       --font-sans        →  font-sans
+
+   Use those generated names. Do NOT write the arbitrary-value form `rounded-[--radius-card]`:
+   it compiles to `border-radius: --radius-card`, which is not valid CSS, so the browser drops
+   the declaration and you get a square corner with no error anywhere. If you genuinely need the
+   arbitrary form, it must be `rounded-[var(--radius-card)]` or the v4 shorthand
+   `rounded-(--radius-card)`.
+   ============================================================================================= */
+
+@import "tailwindcss";
+
+@theme {
+  /* -------------------------------------------------------------------------------------------
+     Typography
+
+     A system font stack for now. Phase 8 replaces this with a self-hosted variable font loaded
+     through next/font/local — never next/font/google and never a CDN, because SPEC constraint D2
+     forbids any runtime network request. A font that stalls on clinic guest wifi blocks first
+     paint, and the demo opens on a blank screen.
+     ------------------------------------------------------------------------------------------- */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* -------------------------------------------------------------------------------------------
+     Neutrals — the calm grey scale that carries most of the interface.
+     ------------------------------------------------------------------------------------------- */
+  --color-canvas: oklch(98.4% 0.002 247);   /* page background */
+  --color-surface: oklch(100% 0 0);         /* cards, tables, panels */
+  --color-border: oklch(92.6% 0.005 247);   /* hairline dividers */
+  --color-border-strong: oklch(87% 0.008 247);
+
+  --color-ink: oklch(21% 0.015 253);        /* primary text */
+  --color-ink-muted: oklch(46% 0.014 253);  /* secondary text, table meta */
+  --color-ink-subtle: oklch(62% 0.012 253); /* placeholders, disabled */
+
+  /* -------------------------------------------------------------------------------------------
+     Brand — a deep, medical blue. Used for primary actions and focus rings, nothing decorative.
+     ------------------------------------------------------------------------------------------- */
+  --color-brand: oklch(48% 0.13 250);
+  --color-brand-hover: oklch(43% 0.13 250);
+  --color-brand-subtle: oklch(96% 0.02 250); /* tinted backgrounds behind brand text */
+
+  /* -------------------------------------------------------------------------------------------
+     Status palette — one colour per patient status (SPEC section 5.2).
+
+     These six are the most semantically loaded colours in the product: an office manager reads
+     the status column faster than the words next to it. They are chosen to stay distinguishable
+     for the most common forms of colour blindness, and every badge also carries a text label so
+     colour is never the sole carrier of meaning.
+     ------------------------------------------------------------------------------------------- */
+  --color-status-active: oklch(55% 0.11 165);      /* ACTIVE    — calm green */
+  --color-status-due-soon: oklch(65% 0.14 75);     /* DUE_SOON  — amber */
+  --color-status-due: oklch(60% 0.16 45);          /* DUE       — orange */
+  --color-status-overdue: oklch(53% 0.19 25);      /* OVERDUE   — red */
+  --color-status-scheduled: oklch(52% 0.13 250);   /* SCHEDULED — brand blue */
+  --color-status-completed: oklch(50% 0.08 200);   /* COMPLETED — muted teal */
+  --color-status-inactive: oklch(62% 0.012 253);   /* INACTIVE  — grey */
+
+  /* Matching low-saturation backgrounds for badge pills. */
+  --color-status-active-bg: oklch(96% 0.03 165);
+  --color-status-due-soon-bg: oklch(96.5% 0.04 75);
+  --color-status-due-bg: oklch(96% 0.04 45);
+  --color-status-overdue-bg: oklch(95.5% 0.04 25);
+  --color-status-scheduled-bg: oklch(96% 0.03 250);
+  --color-status-completed-bg: oklch(96% 0.02 200);
+  --color-status-inactive-bg: oklch(96% 0.003 253);
+
+  /* -------------------------------------------------------------------------------------------
+     Feedback colours for form errors, warnings, and success toasts.
+     ------------------------------------------------------------------------------------------- */
+  --color-danger: oklch(53% 0.19 25);
+  --color-danger-bg: oklch(95.5% 0.04 25);
+  --color-warning: oklch(60% 0.14 75);
+  --color-warning-bg: oklch(96.5% 0.04 75);
+  --color-success: oklch(52% 0.12 165);
+  --color-success-bg: oklch(96% 0.03 165);
+
+  /* -------------------------------------------------------------------------------------------
+     Radii and shadows — subtle. SPEC section 10 explicitly rules out oversized rounded cards.
+     ------------------------------------------------------------------------------------------- */
+  --radius-card: 0.5rem;
+  --radius-control: 0.375rem;
+  --radius-pill: 9999px;
+
+  --shadow-card: 0 1px 2px 0 oklch(21% 0.015 253 / 0.04), 0 1px 3px 0 oklch(21% 0.015 253 / 0.06);
+  --shadow-panel: 0 4px 16px -2px oklch(21% 0.015 253 / 0.08);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Base layer
+   --------------------------------------------------------------------------------------------- */
+
+@layer base {
+  html {
+    /* Anchor links and "scroll to error" behaviour land smoothly, but never for users who have
+       asked their operating system to reduce motion. */
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* A visible, high-contrast focus ring on every interactive element. SPEC section 10 requires
+     full keyboard navigability, and that is worthless if you cannot see where you are. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: var(--radius-control);
+  }
+
+  /* Tabular figures keep dates and counts vertically aligned in tables, which is most of what
+     makes a data-dense screen feel professional rather than homemade. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Utilities
+   --------------------------------------------------------------------------------------------- */
+
+@layer utilities {
+  /* Visually hidden but still announced by screen readers. Used for skip links and for the
+     labels on icon-only buttons. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}

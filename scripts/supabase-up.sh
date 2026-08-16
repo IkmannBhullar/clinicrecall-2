@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+#
+# Starts the local Supabase stack and syncs its generated credentials into the project's env
+# files, so a developer never has to copy keys around by hand.
+#
+# What this does, in order:
+#   1. Checks Docker is actually running, and says so plainly if it is not.
+#   2. Starts the Supabase stack (Postgres + GoTrue auth + Studio), or reuses a running one.
+#   3. Reads the stack's real URLs and keys and writes them into .env.
+#   4. Regenerates apps/web/.env.local containing ONLY the browser-safe subset.
+#
+# Step 4 is a security control, not a convenience: the web env file is generated from an
+# allowlist, so the service-role key structurally cannot end up in the browser bundle.
+#
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${REPO_ROOT}/.env"
+WEB_ENV_FILE="${REPO_ROOT}/apps/web/.env.local"
+
+# Prefer a system-wide supabase binary; fall back to the pinned repo-local one.
+SUPABASE="$(command -v supabase 2>/dev/null || echo "${REPO_ROOT}/.tools/bin/supabase")"
+
+if [ ! -x "${SUPABASE}" ]; then
+  echo "ERROR: Supabase CLI not found. Run: bash scripts/install-supabase-cli.sh" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 1. Docker preflight
+# ---------------------------------------------------------------------------------------------
+if ! docker info >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+
+ERROR: Docker is not running.
+
+The local Supabase stack (Postgres, Auth, Studio) runs inside Docker containers, so Docker
+must be started before this will work.
+
+  macOS:  open -a Docker      (then wait ~30 seconds for the whale icon to stop animating)
+  Linux:  sudo systemctl start docker
+
+Then run this command again.
+
+EOF
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 2. Start the stack (idempotent — `supabase start` on a running stack just reports status)
+# ---------------------------------------------------------------------------------------------
+cd "${REPO_ROOT}"
+
+if "${SUPABASE}" status >/dev/null 2>&1; then
+  echo "Supabase stack is already running."
+else
+  echo "Starting the Supabase stack (first run downloads container images — this can take a few minutes)..."
+  "${SUPABASE}" start
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 3. Sync generated credentials into .env
+# ---------------------------------------------------------------------------------------------
+if [ ! -f "${ENV_FILE}" ]; then
+  echo "No .env found — creating one first."
+  bash "${REPO_ROOT}/scripts/bootstrap-env.sh"
+fi
+
+# `supabase status -o env` prints shell-style assignments (API_URL=..., ANON_KEY=..., etc).
+# We capture it once and pull out the fields we need.
+STATUS_ENV="$("${SUPABASE}" status -o env)"
+
+extract() {
+  # Pull VALUE out of a `KEY="VALUE"` line, tolerating quoted and unquoted forms.
+  echo "${STATUS_ENV}" | grep -E "^$1=" | head -1 | cut -d= -f2- | sed 's/^"//; s/"$//'
+}
+
+API_URL="$(extract API_URL)"
+ANON_KEY="$(extract ANON_KEY)"
+SERVICE_ROLE_KEY="$(extract SERVICE_ROLE_KEY)"
+DB_URL="$(extract DB_URL)"
+
+if [ -z "${API_URL}" ] || [ -z "${ANON_KEY}" ] || [ -z "${SERVICE_ROLE_KEY}" ]; then
+  echo "ERROR: Could not read credentials from 'supabase status -o env'." >&2
+  echo "Raw output was:" >&2
+  echo "${STATUS_ENV}" >&2
+  exit 1
+fi
+
+# The CLI reports a plain libpq URL (postgresql://...). SQLAlchemy needs the driver named
+# explicitly, so we rewrite the scheme to use psycopg 3.
+SQLALCHEMY_DB_URL="${DB_URL/postgresql:\/\//postgresql+psycopg://}"
+
+# Rewrite the values in place. Using '|' as the sed delimiter because URLs contain '/'.
+set_env_var() {
+  local key="$1" value="$2"
+  if grep -qE "^${key}=" "${ENV_FILE}"; then
+    sed -i.bak "s|^${key}=.*|${key}=${value}|" "${ENV_FILE}"
+    rm -f "${ENV_FILE}.bak"
+  else
+    echo "${key}=${value}" >> "${ENV_FILE}"
+  fi
+}
+
+set_env_var "SUPABASE_URL" "${API_URL}"
+set_env_var "SUPABASE_ANON_KEY" "${ANON_KEY}"
+set_env_var "SUPABASE_SERVICE_ROLE_KEY" "${SERVICE_ROLE_KEY}"
+set_env_var "DATABASE_URL" "${SQLALCHEMY_DB_URL}"
+set_env_var "NEXT_PUBLIC_SUPABASE_URL" "${API_URL}"
+set_env_var "NEXT_PUBLIC_SUPABASE_ANON_KEY" "${ANON_KEY}"
+
+echo "Synced Supabase credentials into .env"
+
+# ---------------------------------------------------------------------------------------------
+# 4. Regenerate the web env file from a strict allowlist
+# ---------------------------------------------------------------------------------------------
+# Read API_BASE_URL back out of .env so the two files cannot drift.
+API_BASE_URL="$(grep -E '^NEXT_PUBLIC_API_BASE_URL=' "${ENV_FILE}" | head -1 | cut -d= -f2- || true)"
+API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000}"
+
+mkdir -p "$(dirname "${WEB_ENV_FILE}")"
+cat > "${WEB_ENV_FILE}" <<EOF
+# GENERATED FILE — do not edit by hand.
+# Regenerated by scripts/supabase-up.sh on every 'make supabase-start'.
+#
+# This file contains ONLY browser-safe values. It is produced from a fixed allowlist, which is
+# why the Supabase service-role key cannot reach the client bundle even by accident.
+NEXT_PUBLIC_SUPABASE_URL=${API_URL}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}
+NEXT_PUBLIC_API_BASE_URL=${API_BASE_URL}
+EOF
+
+echo "Regenerated apps/web/.env.local (browser-safe values only)"
+echo ""
+echo "  Supabase API:    ${API_URL}"
+echo "  Supabase Studio: http://127.0.0.1:54323"
+echo ""

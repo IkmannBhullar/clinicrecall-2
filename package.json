@@ -1,0 +1,22 @@
+{
+  "name": "clinicrecall",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClinicRecall — patient annual-visit recall for medical practices (monorepo root).",
+  "//": [
+    "packageManager is pinned per SPEC section 3. pnpm 9+ self-manages: if the pnpm on your",
+    "  PATH is a different version, it downloads and delegates to this one automatically.",
+    "The scripts below are thin pass-throughs. The Makefile at the repo root is the real",
+    "  entry point — start there, not here."
+  ],
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.0.0 <21"
+  },
+  "scripts": {
+    "dev": "pnpm -C apps/web dev",
+    "build": "pnpm -C apps/web build",
+    "lint": "pnpm -C apps/web lint",
+    "typecheck": "pnpm -C apps/web tsc --noEmit"
+  }
+}

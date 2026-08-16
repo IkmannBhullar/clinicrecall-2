@@ -1,0 +1,5 @@
+# pnpm workspace definition.
+# Only apps/web is a Node package today. The API is Python and is managed by uv,
+# so it is deliberately absent from this list.
+packages:
+  - "apps/web"

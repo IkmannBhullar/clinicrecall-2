@@ -1,0 +1,51 @@
+{
+  "name": "@clinicrecall/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClinicRecall web app — Next.js App Router frontend.",
+  "//": [
+    "JSON has no comment syntax, so the notes on this dependency list live here.",
+    "@supabase/ssr + supabase-js: auth only, and only ever with the public anon key.",
+    "  The service-role key must never be imported anywhere under apps/web (SPEC 3.2);",
+    "  scripts/check-bundle-secrets.sh fails the build if it is.",
+    "cva / clsx / tailwind-merge / lucide-react: the primitives shadcn/ui is built on.",
+    "  shadcn/ui components are copy-pasted source under src/components/ui, not a package.",
+    "tailwindcss v4: configured from CSS (see src/app/globals.css), so there is no",
+    "  tailwind.config.js in this project. That is expected, not missing.",
+    "@playwright/test + @axe-core/playwright: drive the 13-step demo walkthrough,",
+    "  capture the README screenshots, and run the accessibility pass (SPEC 10, 11)."
+  ],
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.48.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.474.0",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.50.0",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^20.17.16",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "eslint": "^9.19.0",
+    "eslint-config-next": "^15.1.6",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3"
+  }
+}
