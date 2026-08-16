@@ -17,16 +17,45 @@ A router never issues a query, and a service never builds a Response.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.core.config import settings
+from app.core.startup import recompute_all_patient_statuses
 from app.routers import health
+
+logging.basicConfig(level=settings.log_level)
+
+# ---------------------------------------------------------------------------------------------
+# Lifespan
+# ---------------------------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Run once on startup, and once on shutdown.
+
+    The status recompute is here because cached statuses go stale simply because time passes
+    (SPEC §5.1). Restarting the API between demos, or starting it in the morning after the
+    machine slept, would otherwise show yesterday's status badges beside today's dates.
+
+    It never raises — see ``app/core/startup.py`` for why a failed tidy-up must not stop the
+    service from booting.
+    """
+    recompute_all_patient_statuses()
+    yield
+    # Nothing to tear down: the database engine's connection pool closes itself.
+
 
 # ---------------------------------------------------------------------------------------------
 # Application
 # ---------------------------------------------------------------------------------------------
 
 app = FastAPI(
+    lifespan=lifespan,
     title="ClinicRecall API",
     description=(
         "Identifies patients due for their annual visit and sends professional reminders. "

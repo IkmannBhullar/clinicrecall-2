@@ -10,6 +10,7 @@ in one of the scoped repositories, where the tenancy rule applies.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,6 +26,15 @@ class OrganizationRepository:
 
     def get_by_id(self, organization_id: uuid.UUID) -> Organization | None:
         return self.session.get(Organization, organization_id)
+
+    def list_all(self) -> Sequence[Organization]:
+        """Every practice in the installation.
+
+        Used by the startup status recompute, which has to sweep all tenants because there is no
+        request context to tell it which one to work on. Not exposed through any API route —
+        nothing a signed-in user does should ever enumerate other practices.
+        """
+        return self.session.execute(select(Organization)).scalars().all()
 
     def get_by_slug(self, slug: str) -> Organization | None:
         """Look up a practice by its URL-safe identifier, e.g. "green-valley-family-clinic".

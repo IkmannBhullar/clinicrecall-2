@@ -31,7 +31,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import Select, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.base import Base
@@ -72,8 +72,11 @@ class OrganizationScopedRepository[ModelT: Base]:
         Every query in the application passes through this method. If the definition of tenancy
         ever changes, this is the one line that changes with it.
         """
-        # Every tenant table has this column; `getattr` is needed only because ModelT is generic.
-        return getattr(self.model, "organization_id") == organization_id  # noqa: B009
+        # `getattr` is needed only because ModelT is generic — mypy cannot know that every model
+        # this class is parameterised with has an `organization_id` column, so the attribute has
+        # to be reached dynamically and the comparison's type restated.
+        column: InstrumentedAttribute[uuid.UUID] = self.model.organization_id  # type: ignore[attr-defined]
+        return column == organization_id
 
     def _scoped_select(self, organization_id: uuid.UUID) -> Select[tuple[ModelT]]:
         """Start a SELECT that is already restricted to one organization.

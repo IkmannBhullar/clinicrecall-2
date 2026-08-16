@@ -129,7 +129,98 @@ inspection alone would only prove a policy is *installed*, not that its expressi
 
 ## Status state machine
 
-_Arrives with phase 3, alongside `RecallService`._
+Patient status is **derived, not authored**. It is not a field anyone sets; it is a pure function
+of five values, cached on the row for query performance. `RecallService.compute_status` is the
+only thing that decides it, and `apply_derived_fields` is the only thing that writes it.
+
+### The decision
+
+Seven bands, checked strictly top to bottom. The order matters for the first three, because a
+patient can satisfy several at once.
+
+```mermaid
+flowchart TD
+    Start([compute_status]) --> Inactive{reminders paused<br/>or opted out?}
+    Inactive -->|yes| INACTIVE([INACTIVE])
+    Inactive -->|no| Sched{scheduled_for set<br/>and >= today?}
+    Sched -->|yes| SCHEDULED([SCHEDULED])
+    Sched -->|no| Comp{last visit within<br/>the past 30 days?}
+    Comp -->|yes| COMPLETED([COMPLETED])
+    Comp -->|no| Days{"d = days until due"}
+    Days -->|d &gt; 30| ACTIVE([ACTIVE])
+    Days -->|1 ≤ d ≤ 30| DUE_SOON([DUE_SOON])
+    Days -->|-7 ≤ d ≤ 0| DUE([DUE])
+    Days -->|d &lt; -7| OVERDUE([OVERDUE])
+```
+
+The four date-derived bands tile the integers exactly — no gap, no overlap. A test walks 81
+consecutive days and asserts there are precisely three transitions across them, which catches
+both a band that was split and one that was swallowed.
+
+### How a patient moves
+
+Two of the seven states are **transient by design**: they decay on their own, with nobody
+touching the record.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    ACTIVE --> DUE_SOON: 30 days before due
+    DUE_SOON --> DUE: due date arrives
+    DUE --> OVERDUE: 7 day grace expires
+
+    DUE_SOON --> SCHEDULED: staff mark booked
+    DUE --> SCHEDULED: staff mark booked
+    OVERDUE --> SCHEDULED: staff mark booked
+
+    SCHEDULED --> COMPLETED: visit marked complete
+    SCHEDULED --> OVERDUE: appointment date passes<br/>without completion
+
+    DUE --> COMPLETED: visit marked complete
+    OVERDUE --> COMPLETED: visit marked complete
+    COMPLETED --> ACTIVE: 30 days later
+
+    ACTIVE --> INACTIVE: paused or opted out
+    DUE_SOON --> INACTIVE: paused or opted out
+    OVERDUE --> INACTIVE: paused or opted out
+    INACTIVE --> ACTIVE: staff resume
+```
+
+**`SCHEDULED` expires.** If the appointment date passes and nobody marked the visit complete, the
+patient drops back to their date-derived band. Without that, a demo left running would show
+patients permanently "Scheduled" and the recovery funnel would be a lie (SPEC §5.2).
+
+**`COMPLETED` decays.** Completing a visit advances `last_annual_visit_date`, which pushes the due
+date a year out — so the patient would otherwise flip straight to ACTIVE and staff would get no
+visible confirmation that their action registered. It shows as COMPLETED for 30 days, then
+rejoins the normal population by itself.
+
+**`INACTIVE` outranks everything.** A patient who has withdrawn consent never appears in an
+OVERDUE list, because that list is a work queue — surfacing them there invites staff to chase
+someone who asked to be left alone, which is the exact mistake the opt-out exists to prevent.
+
+Note the asymmetry on the way out of INACTIVE: staff can undo their own pause, but
+`resume_reminders` deliberately does **not** clear `opted_out_at`. Only the patient can reverse
+that, through the link in the email they were sent. If staff could un-opt-out someone from the UI,
+the unsubscribe link would be decorative.
+
+### Keeping the cache honest
+
+A denormalised column is correct when written and stops being correct the moment a code path
+forgets to recompute — silently, and in a way that looks entirely plausible on screen. Three
+things guard it:
+
+1. **Every mutation recomputes.** `mark_scheduled`, `mark_completed`, `pause_reminders`,
+   `resume_reminders`, and `record_opt_out` all end in `apply_derived_fields`.
+2. **Two scheduled sweeps.** `recompute_organization` runs on API startup
+   ([`app/core/startup.py`](../apps/api/app/core/startup.py)) and at the top of the reminder job.
+   Statuses go stale purely because time passes — a patient who was DUE_SOON yesterday is DUE
+   today — so a demo left running overnight corrects itself.
+3. **The drift guard.** `find_drifted_patients` re-derives every patient and reports any whose
+   stored status disagrees. It is read-only on purpose: a diagnostic that silently repairs what it
+   is measuring cannot be used to detect a bug. A test asserts it returns empty, and a second test
+   corrupts a row on purpose to prove the detector actually fires.
 
 ## Notes on the schema
 

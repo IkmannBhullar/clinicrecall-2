@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy import Enum as SAEnum
@@ -177,6 +177,30 @@ class Patient(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         # Serves the status filter chips on the patients list.
         Index("ix_patients_organization_id_status", "organization_id", "status"),
     )
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Construct a patient with its defaults already applied in Python.
+
+        This exists because of a subtle and genuinely dangerous SQLAlchemy behaviour.
+        ``mapped_column(default=True)`` is an *insert* default: it is applied when the row is
+        flushed to the database, not when the object is constructed. So a freshly built
+        ``Patient()`` has ``reminders_enabled = None`` until it is flushed.
+
+        That matters because ``compute_status`` asks ``not patient.reminders_enabled`` — and
+        ``not None`` is ``True``. Every unflushed patient would therefore be classified INACTIVE.
+
+        The CSV importer builds patients and derives their status *before* flushing (it needs the
+        derived values to be part of the same transaction), so this is not a hypothetical: a
+        whole imported file would have arrived with every patient marked INACTIVE, and nobody
+        would receive a reminder.
+
+        Setting the defaults here makes a new object coherent immediately. SQLAlchemy does not
+        call ``__init__`` when loading existing rows, so this affects construction only.
+        """
+        kwargs.setdefault("reminders_enabled", True)
+        kwargs.setdefault("preferred_contact_method", PreferredContactMethod.EMAIL)
+        kwargs.setdefault("status", PatientStatus.ACTIVE)
+        super().__init__(**kwargs)
 
     # ---------------------------------------------------------------------------------------
     # Convenience properties

@@ -14,7 +14,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 const PHASES: ReadonlyArray<{ number: number; name: string; done: boolean }> = [
   { number: 1, name: "Foundation and toolchain", done: true },
   { number: 2, name: "Schema, migrations, and tenancy", done: true },
-  { number: 3, name: "RecallService domain core", done: false },
+  { number: 3, name: "RecallService domain core", done: true },
   { number: 4, name: "Authentication and security", done: false },
   { number: 5, name: "ReminderService", done: false },
   { number: 6, name: "CSV import", done: false },
