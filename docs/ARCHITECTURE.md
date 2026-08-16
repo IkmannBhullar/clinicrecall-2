@@ -53,7 +53,42 @@ The spec leaves a handful of decisions open. They are recorded here rather than 
 
 ## Request lifecycle
 
-_Arrives with phase 4, alongside the authentication dependency it describes._
+What happens between a browser making a request and a row coming back.
+
+```mermaid
+flowchart TD
+    Req([HTTP request]) --> CID[CorrelationIdMiddleware<br/>assigns a request id]
+    CID --> SEC[SecurityHeadersMiddleware]
+    SEC --> SIZE{Body over 10 MB?}
+    SIZE -->|yes| R413[413 REQUEST_TOO_LARGE]
+    SIZE -->|no| CORS{Origin allowed?}
+    CORS -->|no| RCORS[CORS refusal]
+    CORS -->|yes| RATE{Within rate limit?}
+    RATE -->|no| R429[429 RATE_LIMITED]
+    RATE -->|yes| TOK[verify_access_token<br/>JWKS signature, iss, aud, exp]
+    TOK -->|invalid| R401[401 UNAUTHORIZED]
+    TOK -->|JWKS unreachable| R503[503 SERVICE_UNAVAILABLE]
+    TOK -->|valid| USR[get_current_user<br/>sub → users.auth_user_id]
+    USR -->|no application user| R401
+    USR -->|found| ORG[organization_id resolved server-side]
+    ORG --> SVC[service layer]
+    SVC --> REPO["repository — scoped by organization_id"]
+    REPO --> DB[(PostgreSQL)]
+```
+
+Middleware order is significant, and is written in reverse in `app/main.py` because Starlette
+applies middleware in reverse registration order. `CorrelationIdMiddleware` is outermost so that
+everything inside it — including a size-limit rejection and every error handler — has an
+identifier to log and return.
+
+Note the two distinct failure modes at the token step. **Invalid** is 401: we checked and
+refused. **JWKS unreachable** is 503: we could not check at all. Collapsing them into 401 would
+tell users their session had expired when the real problem was that the auth server was down,
+sending them to re-enter a password that was never wrong.
+
+The last two steps are the tenancy guarantee. `organization_id` arrives from the database via a
+verified token subject — never from the request — and every repository call below that point
+requires it as its first argument.
 
 ## Tenancy enforcement
 

@@ -25,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import engine
+from app.core.security import reset_jwks_cache
 from app.models import (
     ClinicSettings,
     Organization,
@@ -59,6 +60,23 @@ def require_database() -> None:
             f"  Underlying error: {exc}\n",
             returncode=1,
         )
+
+
+@pytest.fixture(autouse=True)
+def isolate_jwks_cache() -> Generator[None, None, None]:
+    """Give every test a clean JWKS cache.
+
+    ``app.core.security`` keeps the cache in a module-level global, which is right for the
+    application — one process, one key set — and a hazard in a test suite, because a stub
+    installed by one test is visible to every test that follows.
+
+    That is not hypothetical: it caused an intermittent failure in the Supabase integration
+    tests, which reached for a real signing key inside a stub cache that had never heard of it.
+    Resetting on both sides makes the ordering irrelevant.
+    """
+    reset_jwks_cache()
+    yield
+    reset_jwks_cache()
 
 
 @pytest.fixture

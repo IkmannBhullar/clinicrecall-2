@@ -194,7 +194,7 @@ tests passing.
 | 1 | Foundation and toolchain | ✅ |
 | 2 | Schema, migrations, and tenancy | ✅ |
 | 3 | RecallService domain core | ✅ |
-| 4 | Authentication and security | ⬜ |
+| 4 | Authentication and security | ✅ |
 | 5 | ReminderService | ⬜ |
 | 6 | CSV import | ⬜ |
 | 7 | Seed data and demo reset | ⬜ |

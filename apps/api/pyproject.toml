@@ -136,4 +136,5 @@ addopts = "--strict-markers --strict-config"
 markers = [
     "db: test requires a live PostgreSQL database",
     "slow: test takes more than a second",
+    "integration: test talks to the live Supabase stack (skips cleanly if it is not running)",
 ]

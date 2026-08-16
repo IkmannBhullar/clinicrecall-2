@@ -1,9 +1,9 @@
 """FastAPI application entry point.
 
-This module does one job: assemble the application. It wires together configuration, middleware,
-and routers, and it contains no business logic of its own.
+This module does one job: assemble the application. It wires together configuration, logging,
+middleware, error handling, rate limiting, and routers, and it contains no business logic.
 
-The layering rule for the whole backend (SPEC section 13):
+The layering rule for the whole backend (SPEC §13):
 
     routers  ->  services  ->  repositories  ->  models
 
@@ -17,17 +17,29 @@ A router never issues a query, and a service never builds a Response.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.errors import register_error_handlers
+from app.core.logging import configure_logging, get_logger
+from app.core.middleware import (
+    CorrelationIdMiddleware,
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
+from app.core.rate_limit import register_rate_limiting
 from app.core.startup import recompute_all_patient_statuses
-from app.routers import health
+from app.routers import health, me
 
-logging.basicConfig(level=settings.log_level)
+# Configured before anything else logs, so the PII redaction filter is in place from the very
+# first record (SPEC §9).
+configure_logging()
+logger = get_logger(__name__)
+
 
 # ---------------------------------------------------------------------------------------------
 # Lifespan
@@ -45,6 +57,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     It never raises — see ``app/core/startup.py`` for why a failed tidy-up must not stop the
     service from booting.
     """
+    logger.info("Starting ClinicRecall API (environment=%s)", settings.app_env)
     recompute_all_patient_statuses()
     yield
     # Nothing to tear down: the database engine's connection pool closes itself.
@@ -70,9 +83,46 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------------------------
+# Middleware
+#
+# ORDER IS SIGNIFICANT. Starlette applies middleware in reverse registration order on the way in,
+# so the last one registered is the outermost and runs first. The registrations below are
+# therefore written in reverse of the order they execute:
+#
+#     request  ->  CorrelationId  ->  SecurityHeaders  ->  RequestSizeLimit  ->  CORS  ->  route
+#
+# CorrelationId must be outermost so that everything inside it — including a rejection from the
+# size limiter and any error handler — has an identifier to log and to return.
+# ---------------------------------------------------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    # Exactly one origin, from configuration (SPEC §9). Never a wildcard: with
+    # allow_credentials=True a wildcard is both rejected by browsers and, if it were honoured,
+    # would let any site on the internet make authenticated requests on a user's behalf.
+    allow_origins=[settings.web_origin],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
+    # Lets the browser read the correlation ID off a response, so the frontend can surface it in
+    # an error message.
+    expose_headers=["X-Correlation-ID"],
+)
+
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
+
+# ---------------------------------------------------------------------------------------------
+# Cross-cutting handlers
+# ---------------------------------------------------------------------------------------------
+
+register_error_handlers(app)
+register_rate_limiting(app)
+
+# ---------------------------------------------------------------------------------------------
 # Routers
 # ---------------------------------------------------------------------------------------------
-# Middleware (CORS, security headers, rate limiting, error envelope) is added in phase 4, where
-# it can be built and tested alongside authentication rather than half-configured here.
 
 app.include_router(health.router)
+app.include_router(me.router)

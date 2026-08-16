@@ -100,15 +100,84 @@ aggregator, or retained long after the record it describes has been deleted.
 Patient identifiers in URLs are opaque `public_id` values, never database keys — so a bookmarked
 URL leaks neither the row's identity nor how many patients a practice has.
 
+### Authentication (phase 4)
+
+Access tokens are issued by Supabase Auth (GoTrue) and verified here against the public keys it
+publishes. We hold no secret capable of *minting* a token — only of checking one.
+
+**Asymmetric algorithms only.** `ALLOWED_ALGORITHMS` is `["ES256", "RS256"]`, and that allowlist
+is a security control rather than configuration. The attack it prevents is algorithm confusion:
+JWKS public keys are published to the world by design, so if `HS256` were accepted an attacker
+could take that public key, use it as the HMAC *secret*, sign any payload they liked, and a
+verifier trusting the token's own `alg` header would check the HMAC with the same public key and
+accept it — minting a valid token for any user in the system. `none` is not listed and never will
+be. Both cases have tests.
+
+**Every claim is validated.** `iss`, `aud`, `exp` and `sub` are all *required*, not merely checked
+if present: a token missing `exp` would be valid forever, and one missing `iss` could come from
+any Supabase project on the internet. A 30-second leeway absorbs clock skew, so a machine running
+a few seconds fast does not produce intermittent sign-outs.
+
+**Key caching, and the bound.** Fetching the JWKS document per request would be absurd; never
+refetching would mean a key rotation locks everyone out until a restart. So keys are cached with
+a TTL, an unknown `kid` triggers a refresh (a rotation looks exactly like an unknown `kid`), and
+refreshes are rate-limited to one per 10 seconds. That bound matters: without it, a client
+sending tokens with random `kid` values causes one outbound request per token, turning our
+verification path into a denial-of-service amplifier aimed at the auth server — using nothing but
+unauthenticated requests. An empty cache is exempt from the bound, so a failed first fetch cannot
+cause the outage the bound exists to prevent.
+
+**Failing to verify is not the same as refusing.** An unreachable JWKS endpoint returns 503, not
+401. Telling users their session is invalid when the real problem is that the auth server is down
+sends them to re-enter a password that was never wrong.
+
+### Tenant scope resolution (phase 4)
+
+`get_current_user` performs the resolution SPEC §3.2 mandates:
+
+```
+Authorization header → verified JWT → JWT.sub → users.auth_user_id → users.organization_id
+```
+
+**The organization is never taken from the client** — not from the body, not from a query
+parameter, not from a header, and not from a claim inside the token. `TokenClaims` deliberately
+carries no organization and no role; a test asserts their absence structurally so a future
+"convenience" field cannot quietly become a trust boundary. A test also sends a foreign
+organization id by header *and* query string simultaneously and asserts the response still names
+the caller's real practice.
+
+A verified token whose subject has no application user is refused. That is a real situation, not a
+theoretical one: a Supabase account can be created from the Supabase dashboard or by a
+half-finished invite, and such an account must reach nothing at all.
+
+### Transport and request handling (phase 4)
+
+| Control | Detail |
+|---|---|
+| CORS | Exactly one origin, from configuration. Never a wildcard — with credentials enabled that would let any site on the internet make authenticated requests on a signed-in user's behalf. |
+| Security headers | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cache-Control: no-store`, HSTS, and a `default-src 'none'` CSP. Present on error responses too, since a 401 reaches a browser exactly as a 200 does. |
+| Request size limit | 10 MB, refused on the declared `Content-Length` before a byte is read. An unbounded upload lets one request exhaust server memory, and it takes no authentication to attempt. The CSV importer also counts bytes while streaming, because a chunked request sends no `Content-Length`. |
+| Rate limiting | slowapi, never hand-rolled. Separate limits for reads, auth, import, manual sends, and admin utilities — each sized to the specific abuse rather than picked to look prudent. |
+
+### Error responses (phase 4)
+
+Every error uses one envelope: a stable `code` the frontend branches on, a `message` safe to show
+a receptionist, and a `correlation_id`.
+
+**Stack traces never reach the client.** A traceback tells an attacker the framework, the file
+layout, the ORM, and often a SQL fragment, while telling the person reading it precisely nothing.
+The full exception is logged server-side against the correlation ID; the client gets a generic
+message and that twelve-character identifier. A test fetches several failing routes and asserts
+the response body contains no traceback, no `sqlalchemy`, no `psycopg`, and no filesystem path.
+
+`NotFoundError` is returned both for records that do not exist and for records belonging to
+another practice. Distinguishing them would let someone holding a foreign patient identifier
+learn that it is real.
+
 ## Controls still to come
 
 | Control | Phase |
 |---------|-------|
-| Supabase JWT verification via cached JWKS; `iss` / `aud` / `exp` validation | 4 |
-| Server-side `organization_id` resolution (never accepted from the client) | 4 |
-| CORS restricted to the configured web origin | 4 |
-| Rate limiting on auth, import, and send-reminder endpoints | 4 |
-| Error envelope with correlation IDs; no stack traces to clients | 4 |
-| PII redaction filter on application logs | 4 |
-| Request size and row-count limits on CSV upload | 6 |
 | Tokenized, signed unsubscribe links | 5 |
+| Per-patient send throttle (1 manual reminder per hour) | 5 |
+| CSV row-count limits and streaming parse | 6 |
