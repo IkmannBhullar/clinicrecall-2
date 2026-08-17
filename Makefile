@@ -61,8 +61,10 @@ setup: ## Install every dependency and prepare a fresh database (run once)
 	@pnpm install --frozen-lockfile || pnpm install
 	@echo "==> [5/6] Starting the local Supabase stack (Postgres + Auth + Studio in Docker)"
 	@$(MAKE) supabase-start
-	@echo "==> [6/6] Applying database migrations"
+	@echo "==> [6/7] Applying database migrations"
 	@$(MAKE) migrate
+	@echo "==> [7/7] Regenerating the sample CSVs with dates relative to today"
+	@$(MAKE) samples
 	@echo ""
 	@echo "Setup complete. Next:  make seed  (loads demo data), then  make dev"
 	@echo ""
@@ -110,6 +112,10 @@ migrate: ## Apply all Alembic migrations to the local database
 .PHONY: migration
 migration: ## Create a new Alembic migration.  Usage: make migration m="add widgets table"
 	@$(UV) run alembic revision --autogenerate -m "$(m)"
+
+.PHONY: samples
+samples: ## Regenerate docs/samples/*.csv with dates relative to today (SPEC D1)
+	@python3 scripts/generate-sample-csvs.py
 
 .PHONY: seed
 seed: ## Load the deterministic demo data (idempotent — safe to re-run)

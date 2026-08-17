@@ -211,8 +211,35 @@ The email also loads nothing from the network — no images, no web fonts, no sc
 both SPEC constraint D2 and ordinary good practice, since most mail clients block remote content
 by default.
 
+### CSV import (phase 6)
+
+A patient list is the most sensitive thing a practice ever hands over, and the import endpoint is
+where it arrives.
+
+**Two independent size limits.** The middleware refuses an oversized `Content-Length` before
+reading a byte — but a chunked upload declares no length at all, so the parser also counts bytes
+while streaming and stops at 10 MB. A row cap (50,000) bounds the transaction separately, since a
+hundred million rows of `a,b,c` compresses very well over the wire.
+
+**Streamed, not loaded.** The file is parsed row by row rather than read into memory whole.
+
+**No network during validation.** Email checking runs with `check_deliverability=False`, so
+importing never makes a DNS query. That is SPEC constraint D2, and it is also what stops a
+clinic's own domain failing a lookup on conference wifi from rejecting their entire file.
+
+**The organization comes from the token.** As everywhere else — a test posts a foreign
+`organization_id` in the form data and asserts it has no effect.
+
+**Errors say what to do, not what broke.** Every rejection message is written for a receptionist:
+"'13/04/2025' looks like a day-first date… please use the format 2024-01-15", never a stack trace
+or a parser exception. The downloadable error report carries a row number matching what the
+practice sees when they open the file in a spreadsheet.
+
+**All or nothing.** The import runs in one transaction. Tested in two halves rather than by
+making an endpoint blow up: that the service stages writes without committing (verified from a
+separate connection, which cannot see uncommitted work), and that `get_db` rolls back when a
+request raises.
+
 ## Controls still to come
 
-| Control | Phase |
-|---------|-------|
-| CSV row-count limits and streaming parse | 6 |
+Nothing outstanding from SPEC §9. Later phases add UI surfaces for controls already implemented.

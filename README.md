@@ -163,6 +163,7 @@ Run `make` on its own to see the full list. The ones you will actually use:
 | `make setup` | One-time install and database preparation |
 | `make dev` | Start the whole stack |
 | `make seed` | Load the demo data (safe to run repeatedly) |
+| `make samples` | Regenerate `docs/samples/*.csv` with dates relative to today |
 | `make demo-reset` | Wipe changes and restore pristine demo data, in under 30 seconds |
 | `make test` | Run the Python test suite |
 | `make lint` | Run every linter and formatter in check mode |
@@ -196,7 +197,7 @@ tests passing.
 | 3 | RecallService domain core | ✅ |
 | 4 | Authentication and security | ✅ |
 | 5 | ReminderService | ✅ |
-| 6 | CSV import | ⬜ |
+| 6 | CSV import | ✅ |
 | 7 | Seed data and demo reset | ⬜ |
 | 8 | Web foundation and app shell | ⬜ |
 | 9 | Dashboard and Patients | ⬜ |

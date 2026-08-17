@@ -25,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import engine
+from app.core.rate_limit import limiter
 from app.core.security import reset_jwks_cache
 from app.models import (
     ClinicSettings,
@@ -77,6 +78,23 @@ def isolate_jwks_cache() -> Generator[None, None, None]:
     reset_jwks_cache()
     yield
     reset_jwks_cache()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits() -> Generator[None, None, None]:
+    """Give every test a fresh rate-limit budget.
+
+    slowapi keeps its counters in process memory, keyed by client address — and every test shares
+    the address "testclient". Without this, the sixteenth import test in a file starts failing
+    with 429 because the fifteen before it used up the 5-per-minute budget.
+
+    That failure is particularly misleading: it appears in whichever test happens to run
+    sixteenth, moves when tests are reordered, and looks like a bug in the endpoint under test
+    rather than in the harness. Resetting between tests removes the coupling entirely, and the
+    limits themselves are still tested explicitly where they matter.
+    """
+    limiter.reset()
+    yield
 
 
 @pytest.fixture
