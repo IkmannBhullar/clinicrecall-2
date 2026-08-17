@@ -33,7 +33,7 @@ from app.core.middleware import (
 )
 from app.core.rate_limit import register_rate_limiting
 from app.core.startup import recompute_all_patient_statuses
-from app.routers import health, me
+from app.routers import health, jobs, me, unsubscribe
 
 # Configured before anything else logs, so the PII redaction filter is in place from the very
 # first record (SPEC §9).
@@ -126,3 +126,5 @@ register_rate_limiting(app)
 
 app.include_router(health.router)
 app.include_router(me.router)
+app.include_router(jobs.router)
+app.include_router(unsubscribe.router)

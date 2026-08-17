@@ -20,13 +20,25 @@ from app.services.recall import (
     recall_input_from_patient,
     today_for_timezone,
 )
+from app.services.reminders import (
+    CATCH_UP_WINDOW_DAYS,
+    MANUAL_SEND_COOLDOWN,
+    JobSummary,
+    ReminderService,
+    ReminderThrottledError,
+)
 
 __all__ = [
+    "CATCH_UP_WINDOW_DAYS",
     "COMPLETED_DISPLAY_WINDOW_DAYS",
     "DUE_GRACE_DAYS",
     "DUE_SOON_WINDOW_DAYS",
+    "MANUAL_SEND_COOLDOWN",
+    "JobSummary",
     "PatientRecallInput",
     "RecallService",
+    "ReminderService",
+    "ReminderThrottledError",
     "compute_status",
     "next_annual_due_date",
     "recall_input_from_patient",

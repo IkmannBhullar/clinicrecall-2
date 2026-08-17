@@ -1,0 +1,48 @@
+{# Plain-text alternative (SPEC §6.5).
+
+   Not an afterthought. Some mail clients are configured to prefer text, some strip HTML
+   entirely, and a message with no text part scores worse with spam filters — which for a recall
+   email means it does not arrive, and the patient does not come in.
+
+   WHITESPACE IS CONTENT HERE. The renderer runs Jinja with trim_blocks and lstrip_blocks, so
+   every `{% ... %}` tag on its own line consumes the newline that follows it. That is what keeps
+   the template readable, but it means blank lines between paragraphs have to be written
+   explicitly — otherwise the output arrives as one run-on block with the clinic name, phone
+   number and website concatenated into a single unreadable line.
+
+   The wording matches the HTML version exactly. A text part that differs from the HTML part is
+   both a red flag to spam filters and a genuine inconsistency for whoever reads it.
+#}
+Hi {{ first_name }},
+
+This is a friendly reminder from {{ clinic_name }} that it may be time to schedule
+your annual visit.
+
+{% if clinic_phone %}
+Please contact our office at {{ clinic_phone }}{% if scheduling_url %} or use the link below{% endif %}.
+{% elif scheduling_url %}
+Please use the link below to book a time that suits you.
+{% else %}
+Please contact our office to book a time that suits you.
+{% endif %}
+{% if scheduling_url %}
+
+Schedule an appointment: {{ scheduling_url }}
+{% endif %}
+{% if reminder_signature %}
+
+{{ reminder_signature }}
+{% endif %}
+
+{{ clinic_name }}
+{% if clinic_phone %}
+{{ clinic_phone }}
+{% endif %}
+{% if clinic_website %}
+{{ clinic_website }}
+{% endif %}
+
+--
+You are receiving this because you are a patient of {{ clinic_name }}.
+To stop receiving these reminders, visit:
+{{ unsubscribe_url }}

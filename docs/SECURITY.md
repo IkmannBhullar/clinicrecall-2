@@ -174,10 +174,45 @@ the response body contains no traceback, no `sqlalchemy`, no `psycopg`, and no f
 another practice. Distinguishing them would let someone holding a foreign patient identifier
 learn that it is real.
 
+### Reminders and opt-out (phase 5)
+
+**Signed unsubscribe links.** Every reminder carries a one-click opt-out, reached by someone with
+no session at all — a patient, on a phone, from an email. The naive URL `/unsubscribe/{public_id}`
+fails badly: anyone could walk the identifier space and opt out a clinic's entire recall list, and
+because opt-out is honoured permanently that is a quiet, hard-to-notice denial of service against
+the product's core function. So the link carries an HMAC over the patient's public id, verified
+with a constant-time comparison.
+
+The links **never expire**, deliberately. A patient who finds a two-year-old reminder and wants to
+stop hearing from the practice must be able to. An expired consent mechanism stops working exactly
+when someone tries to use it.
+
+Failures are indistinguishable: a bad signature and an unknown patient produce the same page, so
+the endpoint cannot be used as an oracle for discovering which identifiers are real. It is also
+rate-limited, since without that it is a fast way to test forged tokens.
+
+**The job token.** `POST /internal/jobs/process-reminders` is called by a scheduler, which has no
+user session, so it authenticates on a shared `X-Job-Token` header — compared in constant time,
+for the same reason as the unsubscribe signature. A missing token and a wrong one return byte-
+identical responses.
+
+**Manual send throttle.** Manual sends are deliberately exempt from the reminder unique index (see
+`ARCHITECTURE.md`), so nothing structural stops a staff member — or a double-click — emailing the
+same person repeatedly. A one-hour per-patient cooldown fills that gap. It protects a patient's
+inbox rather than the server, which is why it is time-based rather than a database constraint.
+
+**What a reminder may contain.** Nothing clinical, ever (SPEC §6.5). No diagnosis, condition, or
+visit reason. A recall email goes to an address the practice cannot vouch for, may be read on a
+shared screen or a lock-screen preview, and sits in an inbox indefinitely. A test asserts a list
+of clinical terms appears nowhere in the rendered message, because this is exactly the copy
+someone later "improves" by adding a helpful detail.
+
+The email also loads nothing from the network — no images, no web fonts, no scripts — which is
+both SPEC constraint D2 and ordinary good practice, since most mail clients block remote content
+by default.
+
 ## Controls still to come
 
 | Control | Phase |
 |---------|-------|
-| Tokenized, signed unsubscribe links | 5 |
-| Per-patient send throttle (1 manual reminder per hour) | 5 |
 | CSV row-count limits and streaming parse | 6 |

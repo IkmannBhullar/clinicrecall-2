@@ -1,0 +1,141 @@
+{# Responsive HTML reminder (SPEC §6.5).
+
+   Written the way email HTML has to be written, which is not how web HTML is written:
+
+   * Tables for layout. Outlook renders with Microsoft Word's engine, which has no meaningful
+     support for flexbox or grid.
+   * Inline styles. Gmail strips <style> blocks in several contexts, so anything that matters
+     is set on the element.
+   * No external resources at all — no images, no web fonts. That is partly SPEC constraint D2,
+     and partly that most mail clients block remote content by default, so a design depending on
+     an image arrives broken.
+   * A max-width of 600px, the long-standing safe width for mobile mail clients.
+
+   CONTENT RULE: nothing clinical, ever. No diagnosis, no condition, no visit reason. A recall
+   email travels to an address the practice cannot vouch for, may be read on a shared screen, and
+   sits in an inbox indefinitely. "It may be time to schedule your annual visit" is the whole
+   message.
+#}<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ subject }}</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f5f6f8; -webkit-font-smoothing:antialiased;">
+
+    {# Preview text: what an inbox shows beside the subject line. Hidden in the body itself.
+       Without it, clients show the first visible text, which would be the greeting. #}
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
+      A friendly reminder from {{ clinic_name }} about your annual visit.
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="background-color:#f5f6f8; padding:24px 12px;">
+      <tr>
+        <td align="center">
+
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+                 style="max-width:600px; width:100%; background-color:#ffffff; border-radius:8px;
+                        border:1px solid #e4e6ea; font-family:-apple-system,BlinkMacSystemFont,
+                        'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+
+            {# Wordmark as text, never an image (SPEC §10) — blocked remote content would
+               otherwise leave the email headed by an empty box. #}
+            <tr>
+              <td style="padding:28px 32px 0 32px;">
+                <p style="margin:0; font-size:15px; font-weight:600; color:#1d2939;">
+                  {{ clinic_name }}
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:20px 32px 0 32px;">
+                <p style="margin:0 0 16px 0; font-size:16px; line-height:24px; color:#1d2939;">
+                  Hi {{ first_name }},
+                </p>
+                <p style="margin:0 0 16px 0; font-size:16px; line-height:24px; color:#475467;">
+                  This is a friendly reminder from {{ clinic_name }} that it may be time to
+                  schedule your annual visit.
+                </p>
+                <p style="margin:0 0 24px 0; font-size:16px; line-height:24px; color:#475467;">
+                  {% if clinic_phone %}
+                    Please contact our office at
+                    <a href="tel:{{ clinic_phone | replace(' ', '') | replace('-', '') }}"
+                       style="color:#1f4d8f; text-decoration:none;">{{ clinic_phone }}</a>{% if scheduling_url %}
+                    or use the button below{% endif %}.
+                  {% elif scheduling_url %}
+                    Please use the button below to book a time that suits you.
+                  {% else %}
+                    Please contact our office to book a time that suits you.
+                  {% endif %}
+                </p>
+              </td>
+            </tr>
+
+            {% if scheduling_url %}
+            <tr>
+              <td style="padding:0 32px 8px 32px;">
+                {# A table-wrapped button: Outlook ignores padding on an anchor, so the
+                   clickable area would collapse to the text without this. #}
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" style="background-color:#1f4d8f; border-radius:6px;">
+                      <a href="{{ scheduling_url }}"
+                         style="display:inline-block; padding:12px 24px; font-size:15px;
+                                font-weight:600; color:#ffffff; text-decoration:none;">
+                        Schedule Appointment
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            {% endif %}
+
+            <tr>
+              <td style="padding:24px 32px 0 32px;">
+                <hr style="border:none; border-top:1px solid #e4e6ea; margin:0 0 16px 0;" />
+                {% if reminder_signature %}
+                <p style="margin:0 0 16px 0; font-size:14px; line-height:22px; color:#475467;
+                          white-space:pre-line;">{{ reminder_signature }}</p>
+                {% endif %}
+                <p style="margin:0; font-size:14px; line-height:22px; color:#1d2939; font-weight:600;">
+                  {{ clinic_name }}
+                </p>
+                {% if clinic_phone %}
+                <p style="margin:0; font-size:14px; line-height:22px; color:#475467;">
+                  {{ clinic_phone }}
+                </p>
+                {% endif %}
+                {% if clinic_website %}
+                <p style="margin:0 0 4px 0; font-size:14px; line-height:22px;">
+                  <a href="{{ clinic_website }}" style="color:#1f4d8f; text-decoration:none;">
+                    {{ clinic_website }}
+                  </a>
+                </p>
+                {% endif %}
+              </td>
+            </tr>
+
+            {# The opt-out. SPEC §6.5 requires it, and every clinic asks about it in the demo. #}
+            <tr>
+              <td style="padding:20px 32px 28px 32px;">
+                {# The anchor is kept on one line on purpose. Breaking it across lines puts a
+                   newline inside the element, which HTML renders as a space — so the sentence
+                   arrives as "Stop receiving these reminders ." with a gap before the full
+                   stop. Small, but it is the kind of detail that makes an email look automated. #}
+                <p style="margin:0; font-size:12px; line-height:18px; color:#98a2b3;">
+                  You are receiving this because you are a patient of {{ clinic_name }}.
+                  <a href="{{ unsubscribe_url }}" style="color:#98a2b3; text-decoration:underline;">Stop receiving these reminders</a>.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

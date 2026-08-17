@@ -284,3 +284,50 @@ an office manager checking a revenue figure by hand will notice a cent.
 enum types on the way up but only emits `DROP TABLE` on the way down, leaving orphaned types that
 make the next `upgrade head` fail. The initial migration drops all eight explicitly, and
 `tests/test_migrations.py` fails if a newly added enum is not covered.
+
+## How a reminder is sent exactly once
+
+The order of operations in `ReminderService._process_one` is the whole guarantee, and it is
+deliberately counter-intuitive: **the database row is written before the email is sent.**
+
+```mermaid
+sequenceDiagram
+    participant Job as reminder job
+    participant DB as PostgreSQL
+    participant P as EmailProvider
+
+    Job->>DB: SAVEPOINT
+    Job->>DB: INSERT reminder_events (patient, rule, due_date_snapshot)
+    alt unique index rejects it
+        DB-->>Job: IntegrityError
+        Job->>DB: ROLLBACK TO SAVEPOINT
+        Note over Job: skipped_duplicate++ — nothing was sent
+    else insert succeeds
+        DB-->>Job: ok
+        Job->>DB: RELEASE SAVEPOINT
+        Job->>P: send(rendered message)
+        P-->>Job: SendResult
+        Job->>DB: record SENT / FAILED + rendered message
+    end
+```
+
+Three details, each load-bearing:
+
+**Insert first, send second.** Sending first and recording afterwards means a crash between the
+two steps sends the patient a second email on the next run. Recording first means the worst case
+is a reminder marked created that was never sent — visible, and recoverable.
+
+**The database arbitrates, not the code.** SPEC §6.2 forbids an application-level "have I already
+sent this?" query, because two job runs can both execute it, both read "no", and both send. The
+check and the send are not atomic and no amount of care in the query makes them so. A unique index
+is checked atomically at insert, so exactly one process wins.
+
+**The SAVEPOINT is not optional.** An `IntegrityError` poisons the enclosing transaction in
+Postgres. Without `begin_nested()`, the first duplicate would abort every remaining patient in the
+run — and the symptom would be "the job stopped working", not "one row already existed".
+
+`due_date_snapshot` is in the unique key so each annual cycle is a separate slot; without it a
+patient who was reminded and then seen could never receive that rule again. And
+`reminder_rule_id` is nullable so a manual send carries `NULL`, which Postgres never treats as
+equal — that carve-out is what stops the live "Send Reminder" demo beat raising a duplicate-key
+error on stage.
