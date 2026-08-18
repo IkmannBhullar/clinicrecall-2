@@ -371,3 +371,40 @@ re-seed takes under a second. `auth.*` is left alone so the demo login keeps wor
 `alembic_version` is left alone so the database does not look unmigrated afterwards. A test
 asserts the truncate list covers every application table, since one omitted table would quietly
 accumulate demo debris across resets.
+
+## Two bugs that only appear inside a transaction
+
+Both were found by a single failing test on the failure-recovery path, and both are worth
+recording because neither is visible from reading the code.
+
+### `now()` is the transaction's clock, not the statement's
+
+PostgreSQL's `now()` returns the time the **transaction** began. Every row written inside one
+transaction therefore receives a byte-identical `created_at`.
+
+That is harmless for a timestamp meaning "roughly when this happened" and wrong for anything that
+orders rows against each other. Two places here do exactly that: the activity feed sorts
+newest-first, and the failure-recovery queue asks "has a later reminder to this patient
+succeeded?". A corrected resend written in the same request was not *later* than the failure it
+replaced, so the queue could never empty.
+
+The append-only tables now default to `clock_timestamp()`, which reads the actual wall clock at
+each statement (migration `d24526efb4a6`). The mutable tables keep `now()` — nothing orders rows
+within a transaction there, and a transaction-scoped "created" time is arguably more truthful.
+
+### A failed send must not start the manual-send cooldown
+
+The one-hour per-patient cooldown exists to protect a patient's inbox from repeated chasing. A
+message that bounced never reached that inbox — so sending again after correcting the address is
+not a second email to that person, it is the first one.
+
+Counting the bounce against the cooldown refused the resend for an hour, which left the
+failure-recovery queue as a list of problems that could not be fixed from the screen built to fix
+them. `_enforce_manual_cooldown` now skips `FAILED` events.
+
+### And what was deliberately *not* changed
+
+The failed event stays `FAILED` forever. Marking it resolved would falsify the patient's timeline
+— that send really did fail. Instead the *queue* filters out failures that have since been
+superseded by a delivery to the same patient. History stays accurate; the work list stays a work
+list.

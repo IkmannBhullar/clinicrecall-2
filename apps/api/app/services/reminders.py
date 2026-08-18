@@ -472,12 +472,24 @@ class ReminderService:
         return event
 
     def _enforce_manual_cooldown(self, organization_id: uuid.UUID, patient: Patient) -> None:
-        """Refuse a manual send that follows too closely on the previous one."""
+        """Refuse a manual send that follows too closely on one that actually arrived.
+
+        **A failed send does not start the cooldown.** The cooldown protects a patient's inbox
+        from repeated chasing, and a message that bounced never reached their inbox at all — so
+        sending again is not a second email to that person, it is the first one.
+
+        This matters for the failure-recovery flow (SPEC §8). Correcting a bounced address and
+        resending is one intention, and counting the bounce against the cooldown would refuse the
+        resend for an hour — leaving the recovery queue as a list of problems that cannot be
+        fixed from the screen built to fix them.
+        """
         recent = self.events.list_for_patient(organization_id, patient.id, limit=10)
         cutoff = datetime.now(UTC) - MANUAL_SEND_COOLDOWN
 
         for event in recent:
             if event.source is not ReminderSource.MANUAL:
+                continue
+            if event.status is ReminderEventStatus.FAILED:
                 continue
             if event.created_at and event.created_at > cutoff:
                 raise ReminderThrottledError()

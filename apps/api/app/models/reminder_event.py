@@ -25,7 +25,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -141,10 +141,14 @@ class ReminderEvent(Base, UUIDPrimaryKeyMixin):
     rendered_body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     rendered_body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # clock_timestamp(), not now(): Postgres' now() is the *transaction* start time, so every
+    # row written in one transaction would share a timestamp — and both the activity feed's
+    # ordering and the failure-recovery queue's "has a later send succeeded?" check compare
+    # these against each other. See migration d24526efb4a6.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.now(),
+        server_default=text("clock_timestamp()"),
     )
 
     # ---------------------------------------------------------------------------------------

@@ -27,7 +27,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, func
+from sqlalchemy import DateTime, ForeignKey, Index, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -91,8 +91,12 @@ class ActivityEvent(Base, UUIDPrimaryKeyMixin):
         JSONB, nullable=False, default=dict, server_default="{}"
     )
 
+    # clock_timestamp(), not now(): Postgres' now() is the *transaction* start time, so every
+    # row written in one transaction would share a timestamp — and both the activity feed's
+    # ordering and the failure-recovery queue's "has a later send succeeded?" check compare
+    # these against each other. See migration d24526efb4a6.
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
     )
 
     __table_args__ = (

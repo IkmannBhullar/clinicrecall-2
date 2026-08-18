@@ -11,6 +11,9 @@
 
 import { apiFetch } from "@/lib/api";
 import { getAccessToken } from "@/lib/supabase/server";
+import Link from "next/link";
+
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/primitives";
 import { PatientsView } from "@/components/patients/patients-view";
 import type { DashboardResponse, PatientListResponse } from "@/lib/patients";
@@ -58,6 +61,13 @@ export default async function PatientsPage({
       <PageHeader
         title="Patients"
         description="Search, filter, and act on individual patients."
+        // Import lives here rather than in the main navigation, which stays at the five items
+        // SPEC 8 names. Importing is something you do to your patient list.
+        action={
+          <Button asChild variant="secondary">
+            <Link href="/import">Import patients</Link>
+          </Button>
+        }
       />
       <PatientsView data={data} today={dashboard.today} />
     </>
