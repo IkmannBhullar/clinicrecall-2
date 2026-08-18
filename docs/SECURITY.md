@@ -1,7 +1,7 @@
 # Security
 
-> **Status:** written incrementally as the build proceeds; completed in phase 12. Controls are
-> documented here as they land, so this file never describes protection that does not exist yet.
+What ClinicRecall actually protects against, and — just as important — what it does not.
+Every control listed here is implemented and, where it is testable, tested.
 
 ## This is not a compliance document
 
@@ -23,7 +23,7 @@ minimum:
 None of that is in scope here. This project holds **synthetic patient records only**, and the
 application chrome says so on every screen.
 
-## Controls implemented so far
+## Controls implemented
 
 ### Secret handling (phase 1)
 
@@ -240,10 +240,6 @@ making an endpoint blow up: that the service stages writes without committing (v
 separate connection, which cannot see uncommitted work), and that `get_db` rolls back when a
 request raises.
 
-## Controls still to come
-
-Nothing outstanding from SPEC §9. Later phases add UI surfaces for controls already implemented.
-
 ### Frontend session handling (phase 8)
 
 **The session lives in cookies, not `localStorage`.** `@supabase/ssr` stores it in HTTP cookies,
@@ -269,3 +265,33 @@ file, an ESLint rule, and the bundle grep in `make verify`.
 network request goes to `localhost:3000` or the local Supabase at `127.0.0.1:54321`. The Inter
 font is served from `/_next/static/media/`, having been committed to the repository rather than
 fetched from a CDN — which is what makes SPEC constraint D2 true rather than intended.
+
+### Verification (phase 11)
+
+Several of the controls above would decay silently without something checking them, so they are
+enforced by gates in `make verify` rather than by discipline.
+
+**The bundle grep is the one that matters most.** `scripts/check-bundle-secrets.sh` fails the build
+if the service-role key appears anywhere under `apps/web/` or in the built `.next` output. It
+matches the key by its trailing signature rather than its prefix — the anon and service-role keys
+share an identical prefix, so a prefix match would either miss the real leak or fail every correct
+build. It also searches for the base64 encoding of `{"role":"service_role"}` at all three byte
+alignments, because a JWT embedded in a JavaScript string can land on any of them. The check was
+verified the only way this kind of check can be: by planting a real service-role key in the bundle,
+confirming the gate went red, and removing it.
+
+**No patient data reaches the logs**, asserted by a redaction test rather than by reading the log
+statements. Redaction happens in a formatter, not by rewriting exception arguments — once any
+handler formats a record, the traceback is cached on `record.exc_text`, and mutating `args` after
+that point changes nothing.
+
+**Accessibility is a gate, not an aspiration.** The axe pass runs against every screen on every
+verify. It found four status colours below the WCAG AA contrast floor and an unlabelled file input
+on the import screen, both since fixed. Contrast values in `globals.css` are set by measurement and
+carry a documented margin.
+
+**No network egress, re-checked on every run.** The demo walkthrough asserts the console stays
+clean, which catches a blocked external request as well as a JavaScript error. The one message it
+ignores is Chromium reporting that it blocked script execution inside the email preview's sandboxed
+iframe — that message is the sandbox working, and its absence would be the thing worth worrying
+about.

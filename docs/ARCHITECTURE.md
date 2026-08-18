@@ -1,7 +1,7 @@
 # Architecture
 
-> **Status:** written incrementally as the build proceeds; completed in phase 12. What is here
-> now is accurate — it is simply not yet complete.
+How ClinicRecall is put together, and why the non-obvious decisions went the way they did.
+Where a choice cost something, the cost is stated rather than glossed.
 
 ## Module boundaries
 
