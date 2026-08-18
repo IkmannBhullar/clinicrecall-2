@@ -76,6 +76,18 @@ def seed_due_patients(
     return ids
 
 
+def events_for(db: Session, organization_id: uuid.UUID):  # type: ignore[no-untyped-def]
+    """Reminder events belonging to this test's organization.
+
+    Scoping matters: the database these tests run against also holds the committed demo seed
+    (``make verify`` runs `make seed` before `pytest`). An unscoped `db.query(ReminderEvent)`
+    picks up the seed's 50 events as well and fails with MultipleResultsFound — a failure that
+    appears only once someone has seeded, which is to say only in `make verify` and never while
+    writing the test.
+    """
+    return db.query(ReminderEvent).filter(ReminderEvent.organization_id == organization_id)
+
+
 @pytest.fixture
 def org_with_rules(
     db: Session, organization: Organization, clinic_settings: ClinicSettings
@@ -105,15 +117,15 @@ def test_three_consecutive_runs_send_exactly_once(
 
     first = reminders.process_reminders(org_with_rules.id)
     db.flush()
-    count_after_first = db.query(ReminderEvent).count()
+    count_after_first = events_for(db, org_with_rules.id).count()
 
     second = reminders.process_reminders(org_with_rules.id)
     db.flush()
-    count_after_second = db.query(ReminderEvent).count()
+    count_after_second = events_for(db, org_with_rules.id).count()
 
     third = reminders.process_reminders(org_with_rules.id)
     db.flush()
-    count_after_third = db.query(ReminderEvent).count()
+    count_after_third = events_for(db, org_with_rules.id).count()
 
     # Run 1 does the work.
     assert first.created == 5
@@ -200,7 +212,7 @@ def test_a_later_annual_cycle_is_a_separate_slot(
     assert provider.message_count == 1
 
     patient = PatientRepository(db).list_all(org_with_rules.id)[0]
-    first_snapshot = db.query(ReminderEvent).one().due_date_snapshot
+    first_snapshot = events_for(db, org_with_rules.id).one().due_date_snapshot
 
     # The visit happens, so the due date rolls forward a full cycle.
     recall.mark_completed(org_with_rules.id, patient)
@@ -228,7 +240,7 @@ def test_a_later_annual_cycle_is_a_separate_slot(
     assert summary.created == 1
     assert provider.message_count == 2
 
-    snapshots = {event.due_date_snapshot for event in db.query(ReminderEvent).all()}
+    snapshots = {event.due_date_snapshot for event in events_for(db, org_with_rules.id).all()}
     assert snapshots == {first_snapshot, next_due}
 
 
@@ -353,7 +365,7 @@ def test_the_rendered_message_is_stored_on_the_event(
     reminders.process_reminders(org_with_rules.id)
     db.flush()
 
-    event = db.query(ReminderEvent).one()
+    event = events_for(db, org_with_rules.id).one()
 
     assert event.rendered_subject
     assert event.rendered_body_html and "<html" in event.rendered_body_html.lower()
@@ -371,7 +383,7 @@ def test_the_rule_that_fired_is_recorded(
     reminders.process_reminders(org_with_rules.id)
     db.flush()
 
-    event = db.query(ReminderEvent).one()
+    event = events_for(db, org_with_rules.id).one()
 
     assert event.reminder_rule is not None
     assert event.reminder_rule.key is ReminderRuleKey.T_ZERO

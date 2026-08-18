@@ -101,6 +101,7 @@ ignore = [
 # Tests may use asserts freely and print for debugging; seed/CLI scripts are meant to print.
 "tests/*" = ["T20"]
 "app/seed/*" = ["T20"]
+"app/demo_reset.py" = ["T20"]
 "app/cli/*" = ["T20"]
 
 [tool.ruff.format]

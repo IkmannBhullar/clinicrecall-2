@@ -127,6 +127,8 @@ def test_the_job_returns_the_structured_summary_the_spec_requires(
 
 def test_running_the_job_twice_over_http_sends_once(
     client: TestClient,
+    db: Session,
+    organization: Organization,
     due_patient,
     provider: MockEmailProvider,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -134,16 +136,36 @@ def test_running_the_job_twice_over_http_sends_once(
 
     A scheduler that fires twice, or an operator rerunning after a timeout, must not produce a
     second email.
+
+    Asserted against this test's own organization rather than the response totals. This endpoint
+    processes **every** practice, and the database also holds the committed demo seed — so
+    ``skipped_duplicate`` in the response is a sum across tenants, and pinning it to an exact
+    number would make the test depend on how many patients the seed happens to contain.
     """
+    from app.models.reminder_event import ReminderEvent
+
     headers = {"X-Job-Token": settings.job_token}
 
-    first = client.post("/internal/jobs/process-reminders", headers=headers).json()
-    second = client.post("/internal/jobs/process-reminders", headers=headers).json()
+    def our_event_count() -> int:
+        return (
+            db.query(ReminderEvent).filter(ReminderEvent.organization_id == organization.id).count()
+        )
 
-    assert first["sent"] == 1
-    assert second["sent"] == 0
-    assert second["skipped_duplicate"] == 1
+    first = client.post("/internal/jobs/process-reminders", headers=headers).json()
+    after_first = our_event_count()
+
+    second = client.post("/internal/jobs/process-reminders", headers=headers).json()
+    after_second = our_event_count()
+
+    # Our patient was reminded once, and the second run added nothing.
+    assert after_first == 1
+    assert after_second == 1
     assert provider.message_count == 1
+
+    # Globally, the first run did work and the second sent nothing anywhere.
+    assert first["sent"] >= 1
+    assert second["sent"] == 0
+    assert second["skipped_duplicate"] >= 1
 
 
 def test_the_admin_utility_endpoint_requires_authentication(client: TestClient) -> None:
@@ -325,7 +347,9 @@ def test_sent_becomes_delivered_after_the_delay(
     service.process_reminders(organization.id)
     db.flush()
 
-    event = db.query(ReminderEvent).one()
+    # Scoped to this test's organization: the database also holds the committed demo seed,
+    # and an unscoped query would pick up its events too.
+    event = db.query(ReminderEvent).filter(ReminderEvent.organization_id == organization.id).one()
     assert event.status is ReminderEventStatus.SENT
     assert event.delivered_at is None
 

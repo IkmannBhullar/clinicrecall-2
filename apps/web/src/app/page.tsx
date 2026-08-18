@@ -18,7 +18,7 @@ const PHASES: ReadonlyArray<{ number: number; name: string; done: boolean }> = [
   { number: 4, name: "Authentication and security", done: true },
   { number: 5, name: "ReminderService", done: true },
   { number: 6, name: "CSV import", done: true },
-  { number: 7, name: "Seed data and demo reset", done: false },
+  { number: 7, name: "Seed data and demo reset", done: true },
   { number: 8, name: "Web foundation and app shell", done: false },
   { number: 9, name: "Dashboard and Patients", done: false },
   { number: 10, name: "Reminders, Activity, Settings, Import", done: false },

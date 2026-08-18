@@ -152,7 +152,41 @@ That starts everything and prints where to find it:
 Press `Ctrl-C` to stop. The Supabase containers keep running in the background; stop those too
 with `make supabase-stop`.
 
-**Demo credentials** are created by the seed script and documented here in phase 7.
+### Demo credentials
+
+`make seed` creates these two accounts through the Supabase admin API. They exist only in your
+local Supabase instance and hold nothing but synthetic records.
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | `alex.morgan@greenvalley.example.com` | `ClinicRecallDemo2026!` |
+| Staff | `jordan.reyes@greenvalley.example.com` | `ClinicRecallDemo2026!` |
+
+Sign in as **Alex Morgan** for the full demo — the admin-only utilities in Settings (Run reminder
+job, Reset demo data) are hidden from the staff account, which is what the second login is for.
+
+Re-running `make seed` resets both passwords to the values above, so a demo account someone
+fiddled with goes back to what this table says.
+
+### What the demo data looks like
+
+One practice — **Green Valley Family Clinic** — with 55 synthetic patients spread across every
+recall status, and about 90 days of backdated reminder and activity history so no screen is empty
+at first login.
+
+Six patients are guaranteed to be in specific states, because the demo script names them:
+
+| Patient | State | Why they exist |
+|---------|-------|----------------|
+| Sarah Johnson | Overdue, ~24 days | The demo opens here. Two reminders already delivered, the third deliberately unsent so there is something to send live. |
+| Michael Brennan | Due soon, ~11 days | The campaign working ahead of a due date. |
+| Jennifer Tran | Due today | Reminded automatically this morning. |
+| David Okafor | Scheduled | Reminded, then booked — the outcome the product exists to produce. |
+| Maria Castillo | Completed | Seen 6 days ago; the cycle rolled forward a year. |
+| Robert Hale | Overdue, failed reminder | A hard bounce, so the failure-recovery flow has something real in it. |
+
+All identities are fictional, every email is on `@example.com`, and every phone number is in the
+555 range. Nothing here can reach a real person.
 
 ## Common commands
 
@@ -198,7 +232,7 @@ tests passing.
 | 4 | Authentication and security | ✅ |
 | 5 | ReminderService | ✅ |
 | 6 | CSV import | ✅ |
-| 7 | Seed data and demo reset | ⬜ |
+| 7 | Seed data and demo reset | ✅ |
 | 8 | Web foundation and app shell | ⬜ |
 | 9 | Dashboard and Patients | ⬜ |
 | 10 | Reminders, Activity, Settings, Import UI | ⬜ |

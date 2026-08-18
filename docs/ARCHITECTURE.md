@@ -331,3 +331,43 @@ patient who was reminded and then seen could never receive that rule again. And
 `reminder_rule_id` is nullable so a manual send carries `NULL`, which Postgres never treats as
 equal — that carve-out is what stops the live "Send Reminder" demo beat raising a duplicate-key
 error on stage.
+
+## How the demo data stays trustworthy
+
+The seed is not a convenience — SPEC constraints D1, D3 and D4 make it part of the product, and
+three properties are enforced by tests.
+
+**Deterministic identity.** Every seeded row's UUID is derived from its natural key via `uuid5`
+rather than generated randomly. Two things follow. Re-running the seed finds the existing row and
+updates it instead of inserting a duplicate, which is how idempotency is achieved without any
+upsert logic. And a patient keeps the same `public_id` — and therefore the same URL — across a
+`make demo-reset`, so a screenshot, a bookmark, or a Playwright test written last week still
+points at Sarah Johnson.
+
+**Nothing is hardcoded to a calendar date.** Every fixture states an offset (`days_until_due`,
+`days_ago`) and the runner turns it into a date at seed time. A static test greps the seed source
+for `20\d\d-\d\d-\d\d` literals, because the failure it prevents is silent: a demo built on fixed
+dates keeps working for about a week, then every status badge starts disagreeing with the date
+printed beside it.
+
+**The named fixtures are a contract.** `NAMED_FIXTURES` in `app/seed/fixtures.py` declares each
+patient's intended status, and `tests/test_seed.py` asserts the seeded database matches. The demo
+script speaks those states aloud, so "approximately right" is not a category that exists here.
+
+Two of them carry constraints that are easy to break by accident:
+
+* **Sarah Johnson's `T_ZERO` is deliberately unsent**, so the live "Send Reminder" beat has
+  something to do. At 24 days overdue she sits outside the 3-day catch-up window, so running the
+  reminder job during a demo cannot backfill it. A test pins that — widening
+  `CATCH_UP_WINDOW_DAYS` fails the suite rather than the demo.
+* **David Okafor was reminded *before* he was booked**, because SPEC §8's revenue definition
+  requires exactly that sequence. A scheduled patient with no prior reminder would inflate the
+  number without justifying it, and the definition is shown on hover so an office manager can
+  check.
+
+**Reset is truncate-and-reseed, not rebuild.** Tearing down the Supabase containers takes minutes
+and would blow SPEC D3's 30-second budget many times over; a single `TRUNCATE ... CASCADE` plus a
+re-seed takes under a second. `auth.*` is left alone so the demo login keeps working, and
+`alembic_version` is left alone so the database does not look unmigrated afterwards. A test
+asserts the truncate list covers every application table, since one omitted table would quietly
+accumulate demo debris across resets.
