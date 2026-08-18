@@ -125,8 +125,13 @@ export function PatientFilters({ total }: { total: number }) {
       </div>
 
       {/* Filter chips. Real buttons with aria-pressed, so the selected state is announced as
-          well as shown — a highlighted chip means nothing to a screen reader on its own. */}
-      <div className="flex flex-wrap gap-1.5">
+          well as shown — a highlighted chip means nothing to a screen reader on its own.
+
+          Wrapped in a labelled group: the chips are a set of related controls, and without a
+          group name a screen reader announces seven unexplained toggles. It also gives the rest
+          of the page an unambiguous handle on them — "Overdue" is a chip here *and* a badge on
+          every overdue row. */}
+      <div role="group" aria-label="Filter by status" className="flex flex-wrap gap-1.5">
         {PATIENT_STATUSES.map((status) => {
           const active = activeStatuses.includes(status);
           return (

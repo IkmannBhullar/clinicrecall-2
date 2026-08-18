@@ -281,12 +281,19 @@ export function ImportWizard() {
                 A CSV with first name, last name, email, and last visit date.
               </p>
 
-              {/* A real file input, kept off-screen and driven by the button. Keeps the native
-                  file picker, its keyboard behaviour, and its accessibility for free. */}
+              {/* A real file input, kept off-screen and driven by the button below, so the
+                  native file picker and its keyboard behaviour come for free.
+
+                  Off-screen is not the same as unlabelled, though: `sr-only` keeps the input in
+                  the accessibility tree and in the tab order, so without an explicit name a
+                  screen reader reaches it and announces an anonymous file input. axe flags this
+                  as critical, correctly. The visible "Choose a file" button cannot supply the
+                  name because it is a sibling, not a label. */}
               <input
                 ref={inputRef}
                 type="file"
                 accept=".csv,text/csv"
+                aria-label="Choose a CSV file of patients to import"
                 className="sr-only"
                 onChange={(event) => {
                   const selected = event.target.files?.[0];

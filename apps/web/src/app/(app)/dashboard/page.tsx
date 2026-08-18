@@ -45,8 +45,13 @@ export default async function DashboardPage() {
 
       {/* The five KPI cards, in the order SPEC §8 lists them. Three of them link to the patient
           list already filtered — a number worth showing is usually a number someone wants to
-          click through. */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          click through.
+
+          A labelled <section> rather than a bare <div>: it gives screen-reader users a landmark
+          to jump to, and it gives the rest of the page an unambiguous way to refer to "the KPI
+          row" — the word "Overdue" also appears on eight status badges and in the recall
+          overview legend. */}
+      <section aria-label="Key metrics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
           label="Total patients"
           value={dashboard.total_patients}
@@ -80,7 +85,7 @@ export default async function DashboardPage() {
           valuePerVisit={dashboard.revenue.value_per_visit}
           definition={dashboard.revenue.definition}
         />
-      </div>
+      </section>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

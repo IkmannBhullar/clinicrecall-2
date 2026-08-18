@@ -55,7 +55,9 @@
 
   --color-ink: oklch(21% 0.015 253);        /* primary text */
   --color-ink-muted: oklch(46% 0.014 253);  /* secondary text, table meta */
-  --color-ink-subtle: oklch(62% 0.012 253); /* placeholders, disabled */
+  /* 55.5% not 62%: at 62% this was #81878d on the #f9fafb canvas — 3.48:1, under the 4.5:1
+     WCAG AA floor for body text. 55.5% measures 4.55:1 on canvas and 4.75:1 on white. */
+  --color-ink-subtle: oklch(55.5% 0.012 253); /* placeholders, disabled */
 
   /* -------------------------------------------------------------------------------------------
      Brand — a deep, medical blue. Used for primary actions and focus rings, nothing decorative.
@@ -72,13 +74,24 @@
      for the most common forms of colour blindness, and every badge also carries a text label so
      colour is never the sole carrier of meaning.
      ------------------------------------------------------------------------------------------- */
-  --color-status-active: oklch(55% 0.11 165);      /* ACTIVE    — calm green */
-  --color-status-due-soon: oklch(65% 0.14 75);     /* DUE_SOON  — amber */
-  --color-status-due: oklch(60% 0.16 45);          /* DUE       — orange */
+  /* The lightness values here are set by measurement, not taste. Each of these is rendered
+     as small (11-12px) badge text on its matching -bg below, which is body text as far as
+     WCAG is concerned and so needs 4.5:1. The original palette was chosen by eye and four
+     of the seven failed — DUE_SOON was the worst at 2.95:1, which is genuinely hard to read
+     rather than merely non-compliant. These values all measure >= 4.6:1 against their own
+     background; the extra 0.1 absorbs the browser's oklch rounding, which cost us a rerun
+     when a computed 4.51 came back as 4.48. Darkening moves them, deliberately, away from
+     the brighter hues: verify with the axe suite before adjusting any of them.
+
+     Colour is never the sole signal regardless — every badge carries its text label, and
+     accessibility.spec.ts asserts exactly that. */
+  --color-status-active: oklch(52% 0.11 165);      /* ACTIVE    — calm green */
+  --color-status-due-soon: oklch(54% 0.14 75);     /* DUE_SOON  — amber */
+  --color-status-due: oklch(54% 0.16 45);          /* DUE       — orange */
   --color-status-overdue: oklch(53% 0.19 25);      /* OVERDUE   — red */
   --color-status-scheduled: oklch(52% 0.13 250);   /* SCHEDULED — brand blue */
   --color-status-completed: oklch(50% 0.08 200);   /* COMPLETED — muted teal */
-  --color-status-inactive: oklch(62% 0.012 253);   /* INACTIVE  — grey */
+  --color-status-inactive: oklch(53% 0.012 253);   /* INACTIVE  — grey */
 
   /* Matching low-saturation backgrounds for badge pills. */
   --color-status-active-bg: oklch(96% 0.03 165);
@@ -94,9 +107,13 @@
      ------------------------------------------------------------------------------------------- */
   --color-danger: oklch(53% 0.19 25);
   --color-danger-bg: oklch(95.5% 0.04 25);
-  --color-warning: oklch(60% 0.14 75);
+  /* See the contrast note on the status palette above — same story, and this one is the
+     persistent "Demo Data — synthetic patients only" banner (D6) that sits on every screen,
+     so it failed AA seven times over. 60% gave #b07100 on #fff0d6 = 3.60:1; 54% gives
+     4.60:1. */
+  --color-warning: oklch(54% 0.14 75);
   --color-warning-bg: oklch(96.5% 0.04 75);
-  --color-success: oklch(52% 0.12 165);
+  --color-success: oklch(51.5% 0.12 165);
   --color-success-bg: oklch(96% 0.03 165);
 
   /* -------------------------------------------------------------------------------------------
