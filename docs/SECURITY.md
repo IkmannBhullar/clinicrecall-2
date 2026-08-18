@@ -243,3 +243,29 @@ request raises.
 ## Controls still to come
 
 Nothing outstanding from SPEC §9. Later phases add UI surfaces for controls already implemented.
+
+### Frontend session handling (phase 8)
+
+**The session lives in cookies, not `localStorage`.** `@supabase/ssr` stores it in HTTP cookies,
+which means a server component can render for the right user without a round trip, and — more
+importantly — the token is not reachable from arbitrary JavaScript on the page. A token in
+`localStorage` is readable by any script that gets injected; the CSP makes that unlikely, and not
+storing it there makes it moot.
+
+**Middleware refreshes, the API decides.** `src/middleware.ts` refreshes the session on every
+request and redirects signed-out visitors to `/sign-in`. That is a routing convenience, not a
+security boundary: the real control is the API verifying the token on every request. A page
+rendered without data leaks nothing, which is why it is safe for the middleware to be the
+looser check.
+
+It calls `getUser()` rather than `getSession()`, which costs a round trip to the auth server and
+buys the difference between "there is a session cookie" and "there is a valid session".
+
+**Only the anon key ever reaches the browser.** `src/lib/supabase/client.ts` and `server.ts` both
+use it; the service-role key appears nowhere under `apps/web/`, enforced by the generated env
+file, an ESLint rule, and the bundle grep in `make verify`.
+
+**Zero external requests, verified in a browser.** With the app signed in and rendering, every
+network request goes to `localhost:3000` or the local Supabase at `127.0.0.1:54321`. The Inter
+font is served from `/_next/static/media/`, having been committed to the repository rather than
+fetched from a CDN — which is what makes SPEC constraint D2 true rather than intended.

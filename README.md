@@ -233,7 +233,7 @@ tests passing.
 | 5 | ReminderService | ✅ |
 | 6 | CSV import | ✅ |
 | 7 | Seed data and demo reset | ✅ |
-| 8 | Web foundation and app shell | ⬜ |
+| 8 | Web foundation and app shell | ✅ |
 | 9 | Dashboard and Patients | ⬜ |
 | 10 | Reminders, Activity, Settings, Import UI | ⬜ |
 | 11 | End-to-end verification | ⬜ |

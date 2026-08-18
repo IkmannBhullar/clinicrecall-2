@@ -31,13 +31,18 @@
   /* -------------------------------------------------------------------------------------------
      Typography
 
-     A system font stack for now. Phase 8 replaces this with a self-hosted variable font loaded
-     through next/font/local — never next/font/google and never a CDN, because SPEC constraint D2
-     forbids any runtime network request. A font that stalls on clinic guest wifi blocks first
-     paint, and the demo opens on a blank screen.
+     Inter, self-hosted. `--font-inter` is set by next/font/local in src/lib/fonts.ts, which
+     serves the .woff2 committed at src/fonts/ from our own origin.
+
+     Never next/font/google and never a CDN: SPEC constraint D2 forbids runtime network requests,
+     and a font that stalls on clinic guest wifi blocks first paint — the demo opens on a blank
+     screen in front of the customer.
+
+     The system stack remains as the fallback, so text renders immediately while the font loads
+     and still renders at all if the file is ever missing.
      ------------------------------------------------------------------------------------------- */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* -------------------------------------------------------------------------------------------

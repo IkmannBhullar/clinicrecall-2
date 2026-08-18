@@ -81,13 +81,26 @@ if [ -d "${BUILD_DIR}" ]; then
     echo "  skip: SUPABASE_SERVICE_ROLE_KEY not set in .env — nothing to search for"
   fi
 
-  # Supabase service-role JWTs carry "service_role" in their payload. Even if .env is missing,
-  # a leaked key would decode to a token containing that literal, so scan for it directly.
-  if grep -rl --include='*.js' --include='*.json' -F 'service_role' "${BUILD_DIR}" 2>/dev/null | head -20; then
-    echo "FAIL: the literal 'service_role' appears in the compiled client bundle (files above)." >&2
+  # Catch ANY service-role key, not only the one currently in .env.
+  #
+  # A service-role JWT's payload contains {"role":"service_role"}, so the encoded token contains
+  # the base64 of that fragment. Because base64 works in three-byte groups, the encoding depends
+  # on the fragment's offset within the payload — hence three patterns, one per alignment.
+  #
+  # This replaces an earlier check that simply grepped for the literal string "service_role".
+  # That produced a false positive the moment the Supabase client was bundled: the library
+  # contains the role name in its own source, as plain text, entirely legitimately. Matching the
+  # *encoded* form distinguishes "a library mentions the role" from "an actual key is embedded",
+  # which is the only distinction that matters.
+  ENCODED_SERVICE_ROLE_PATTERNS='InJvbGUiOiJzZXJ2aWNlX3Jvb|Jyb2xlIjoic2VydmljZV9yb2xlI|icm9sZSI6InNlcnZpY2Vfcm9sZ'
+
+  if grep -rlE --include='*.js' --include='*.json' --include='*.map' \
+       "${ENCODED_SERVICE_ROLE_PATTERNS}" "${BUILD_DIR}" 2>/dev/null | head -20; then
+    echo "FAIL: a Supabase service-role token is embedded in the client bundle (files above)." >&2
+    echo "      That key bypasses every access control in the database." >&2
     FAILED=1
   else
-    echo "  ok: no 'service_role' literal in ${BUILD_DIR}"
+    echo "  ok: no service-role token encoded anywhere in ${BUILD_DIR}"
   fi
 else
   echo "  skip: ${BUILD_DIR} does not exist — run 'pnpm -C apps/web build' first for a full check"
