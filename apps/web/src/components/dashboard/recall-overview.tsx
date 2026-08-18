@@ -65,7 +65,11 @@ export function RecallOverview({ counts }: { counts: StatusCount[] }) {
               ))}
             </div>
 
-            <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
+            {/* Two columns, not three. This card sits in the narrow sidebar column, and at
+                three the "Due soon" label wrapped onto a second line while its count stayed
+                pinned right by ml-auto — so the number floated away from the label it
+                belonged to. Two columns fit every label on one line at every width. */}
+            <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5">
               {counts.map((entry) => (
                 <li key={entry.status}>
                   <Link
@@ -77,7 +81,7 @@ export function RecallOverview({ counts }: { counts: StatusCount[] }) {
                       className={cn("size-2 shrink-0 rounded-pill", SEGMENT_COLOURS[entry.status])}
                       aria-hidden="true"
                     />
-                    <span className="text-sm text-ink-muted group-hover:text-ink">
+                    <span className="whitespace-nowrap text-sm text-ink-muted group-hover:text-ink">
                       {STATUS_LABELS[entry.status]}
                     </span>
                     <span className="ml-auto text-sm font-medium tabular-nums text-ink">

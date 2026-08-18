@@ -93,6 +93,25 @@ export function PatientDrawer({
     };
   }, [api, publicId]);
 
+  /**
+   * Lock the page behind the drawer.
+   *
+   * Without this, scrolling anywhere over the drawer chains through to the document once the
+   * panel reaches its own scroll limit, and the whole application — sidebar, header and all —
+   * slides up behind a modal that is supposed to be holding your attention. It looks broken,
+   * because it is: a modal that lets the page move under it is not modal.
+   *
+   * The previous value is restored rather than cleared, so this composes with anything else that
+   * might lock scrolling instead of quietly overriding it.
+   */
+  React.useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
   // Escape closes, and focus is moved into the panel on open.
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -143,7 +162,7 @@ export function PatientDrawer({
         aria-modal="true"
         aria-label={patient ? `${patient.first_name} ${patient.last_name}` : "Patient details"}
         tabIndex={-1}
-        className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-border bg-surface shadow-panel focus:outline-none"
+        className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto overscroll-contain border-l border-border bg-surface shadow-panel focus:outline-none"
       >
         {loading ? (
           <DrawerSkeleton onClose={onClose} />
@@ -157,8 +176,15 @@ export function PatientDrawer({
                 </h2>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <StatusBadge status={patient.status} />
+                  {/* Once an appointment is booked, say when it is rather than how late the
+                      patient was. Both facts are true — she is still 24 days past her due date,
+                      and she now has an appointment — but "Scheduled · 24 days overdue" reads as
+                      a contradiction, and it appears at the exact moment in the demo where the
+                      product is meant to show that the problem has just been solved. */}
                   <span className="text-xs text-ink-subtle">
-                    {formatDueDate(patient.next_annual_due_date, today)}
+                    {patient.status === "SCHEDULED" && patient.scheduled_for
+                      ? `Appointment ${formatDate(patient.scheduled_for)}`
+                      : formatDueDate(patient.next_annual_due_date, today)}
                   </span>
                 </div>
               </div>

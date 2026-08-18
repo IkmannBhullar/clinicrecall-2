@@ -56,7 +56,9 @@ patient details never reach them, and the audit trail stores IDs and initials ra
 
 Every reminder carries an unsubscribe link with a signed token. Opening it stops reminders for
 that patient immediately — no account, no password, no "reply STOP and wait". Show it: open a
-patient, click **View the email that was sent**, and the link is right there in the footer.
+patient, click **View the email that was sent**, and scroll to the bottom of the preview — the
+preview pane is shorter than the email, so the footer needs a scroll to reach. "Stop receiving
+these reminders" is the last line.
 
 Three details worth volunteering, because they are the ones that get asked next:
 
