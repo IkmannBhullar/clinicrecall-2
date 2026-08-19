@@ -1,0 +1,13 @@
+# Keep the build context small and free of anything secret.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+.env.*
+!.env.example
+tests/
+htmlcov/
+.coverage

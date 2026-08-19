@@ -21,11 +21,21 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # apps/api/app/core/config.py -> core -> app -> api -> apps -> <repo root>
-REPO_ROOT = Path(__file__).resolve().parents[4]
+#
+# Guarded, because that walk only holds in a checkout. The container image copies apps/api to
+# /app, so config.py sits at /app/app/core/config.py — four parents up is the filesystem root and
+# five does not exist at all, which raised IndexError at import time and took the whole process
+# down before it could log anything useful. There is no .env in a container regardless; the
+# environment is the environment.
+_CONFIG_PATH = Path(__file__).resolve()
+REPO_ROOT = _CONFIG_PATH.parents[4] if len(_CONFIG_PATH.parents) > 4 else _CONFIG_PATH.parents[-1]
 
 # One .env at the repo root serves both the API and (via a generated allowlist file) the web app.
 # Keeping a single source avoids the classic bug where two env files drift and the frontend talks
 # to a different Supabase project than the backend verifies tokens against.
+#
+# Absent in a deployed container, which is fine: pydantic-settings treats a missing env_file as
+# "no file", and real environment variables take precedence over it in any case.
 ENV_FILE = REPO_ROOT / ".env"
 
 
@@ -76,6 +86,26 @@ class Settings(BaseSettings):
     web_origin: str = "http://localhost:3000"
     api_base_url: str = "http://127.0.0.1:8000"
 
+    # Additional browser origins allowed through CORS, comma-separated.
+    #
+    # This exists for Vercel, which gives every preview deployment its own hostname. `web_origin`
+    # stays the single canonical origin; this is the escape hatch, and it is still an explicit
+    # allowlist rather than a wildcard.
+    extra_web_origins: str = ""
+
+    # Whether this deployment is the public demo.
+    #
+    # The demo utilities (reset the data, run the reminder job) are switched off when APP_ENV is
+    # production, because they are demo aids rather than product features. The public demo,
+    # though, is a production deployment that genuinely wants them: the hourly reset is what stops
+    # one visitor's clicking from degrading the demo for everyone after them.
+    #
+    # A separate opt-in flag rather than running the deployment as APP_ENV=development, because
+    # the deployment really is production — it should have production logging, production error
+    # handling, and production security headers. Lying about the environment to get one feature
+    # would turn all of those off as a side effect.
+    demo_mode: bool = False
+
     # Shared secret protecting POST /internal/jobs/process-reminders. Compared in constant time.
     job_token: str = ""
 
@@ -125,6 +155,26 @@ class Settings(BaseSettings):
         return f"{self.supabase_url}/auth/v1"
 
     @property
+    def allowed_origins(self) -> list[str]:
+        """Every browser origin permitted by CORS, in order, without duplicates.
+
+        Never a wildcard: with ``allow_credentials=True`` a wildcard is both rejected by browsers
+        and, were it honoured, would let any site on the internet make authenticated requests on
+        a signed-in user's behalf.
+        """
+        origins = [self.web_origin]
+        origins.extend(
+            candidate.rstrip("/")
+            for raw in self.extra_web_origins.split(",")
+            if (candidate := raw.strip())
+        )
+        # A wildcard is dropped rather than honoured. Browsers reject it alongside
+        # allow_credentials anyway, so passing it through would not widen access — it would
+        # silently break every cross-origin request instead, which is a far more confusing
+        # failure than an origin that was quietly ignored.
+        return [origin for origin in dict.fromkeys(origins) if origin != "*"]
+
+    @property
     def is_production(self) -> bool:
         return self.app_env == "production"
 
@@ -132,9 +182,11 @@ class Settings(BaseSettings):
     def demo_utilities_enabled(self) -> bool:
         """Whether the admin-only demo tools (reset data, run reminder job) are exposed.
 
-        These are demo aids, not product features, so they are switched off in production.
+        These are demo aids, not product features, so they are switched off in production —
+        unless DEMO_MODE is explicitly set, which is what the public demo deployment does. See
+        the note on ``demo_mode`` above.
         """
-        return self.app_env != "production"
+        return self.app_env != "production" or self.demo_mode
 
 
 @lru_cache(maxsize=1)

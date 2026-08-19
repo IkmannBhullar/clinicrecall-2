@@ -4,6 +4,8 @@
 for their annual appointment and sends them professional email reminders — then tracks what
 happened, so the clinic can see the appointments it recovered.
 
+**[▶ Try the live demo](#)** — sign-in credentials are pre-filled; just click Sign in.
+
 > **Demo data only.** Every patient record in this project is synthetic. Nothing here is, or
 > claims to be, HIPAA compliant. See [`docs/SECURITY.md`](docs/SECURITY.md) for what a real
 > healthcare deployment would additionally require.
@@ -20,6 +22,7 @@ happened, so the clinic can see the appointments it recovered.
 - [Setup](#setup)
 - [Running the app](#running-the-app)
 - [Common commands](#common-commands)
+- [Deploying it](#deploying-it)
 - [Documentation](#documentation)
 - [Build status](#build-status)
 
@@ -224,6 +227,20 @@ seed is idempotent, all linters and type checkers pass, every test passes, the P
 walkthrough of the demo completes without a console error, and no server-side secret has leaked
 into the browser bundle.
 
+## Deploying it
+
+The demo runs entirely on your machine and needs no network, which is the point — see
+[Running the app](#running-the-app) above.
+
+To put it on the internet instead, [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) walks through the
+free three-service setup: Vercel for the frontend, Supabase Cloud for the database and auth, and
+Render for the API, with a scheduled workflow that keeps the free instance warm and restores the
+demo data hourly.
+
+```bash
+docker build -t clinicrecall-api apps/api
+```
+
 ## Documentation
 
 | Document | What is in it |
@@ -232,6 +249,7 @@ into the browser bundle.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module boundaries, request lifecycle, tenancy, status state machine |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Every security control, why it exists, and what it does not cover |
 | [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) | The talk track for demoing to a clinic owner |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Putting the demo online, free, with a keepalive and hourly reset |
 
 ## Build status
 

@@ -110,10 +110,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    # Exactly one origin, from configuration (SPEC §9). Never a wildcard: with
-    # allow_credentials=True a wildcard is both rejected by browsers and, if it were honoured,
-    # would let any site on the internet make authenticated requests on a user's behalf.
-    allow_origins=[settings.web_origin],
+    # An explicit allowlist, from configuration (SPEC §9) — the canonical web origin plus any
+    # extra origins (Vercel gives every preview deployment its own hostname). Never a wildcard:
+    # with allow_credentials=True a wildcard is both rejected by browsers and, if it were
+    # honoured, would let any site on the internet make authenticated requests on a user's behalf.
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],

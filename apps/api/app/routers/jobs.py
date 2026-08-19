@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import require_admin
-from app.core.errors import UnauthorizedError
+from app.core.errors import NotFoundError, UnauthorizedError
 from app.core.rate_limit import ADMIN_UTILITY_LIMIT, limiter
 from app.core.tokens import verify_job_token
 from app.models.user import User
@@ -117,3 +117,46 @@ def process_reminders_for_current_organization(
 
     logger.info("Admin %s ran the reminder job for organization %s", user.id, user.organization_id)
     return JobSummaryResponse(**vars(summary))
+
+
+@router.post(
+    "/reset-demo",
+    summary="Restore the public demo to its documented state",
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or wrong X-Job-Token"},
+        404: {"model": ErrorResponse, "description": "Demo utilities are not enabled"},
+    },
+)
+def reset_demo(
+    x_job_token: str | None = Header(default=None, alias="X-Job-Token"),
+) -> dict[str, float | str]:
+    """Wipe and re-seed the demo data.
+
+    This is the scheduled twin of the "Reset demo data" button in Settings. That one is admin-only
+    and needs a signed-in session; this one is driven by a scheduler with a shared secret and no
+    user, which is why it lives here rather than there.
+
+    It exists because a public demo is a shared mutable object. The first visitor who marks Sarah
+    Johnson as scheduled changes what every later visitor sees, and after a day of that the demo
+    no longer matches the script or the screenshots. An hourly reset bounds that drift to an hour.
+
+    Guarded twice over: a valid job token, and ``demo_utilities_enabled``. A deployment that is
+    not a demo has no business exposing an endpoint that deletes every row.
+    """
+    if not verify_job_token(x_job_token):
+        logger.warning("Rejected demo reset call with a missing or incorrect X-Job-Token")
+        raise UnauthorizedError("A valid job token is required.")
+
+    if not settings.demo_utilities_enabled:
+        # 404 rather than 403: an endpoint that is switched off should not confirm it exists.
+        raise NotFoundError("Not found.")
+
+    from app.demo_reset import reset_demo_data
+
+    # Auth accounts are left alone. They are created once when the deployment is first seeded,
+    # and recreating them on every reset would mean calling the Supabase admin API twenty-four
+    # times a day to arrive back where it started.
+    seconds = reset_demo_data(create_auth_accounts=False)
+
+    logger.info("Reset the public demo data in %.1fs", seconds)
+    return {"status": "ok", "seconds": round(seconds, 2)}

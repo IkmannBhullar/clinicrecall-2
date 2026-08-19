@@ -1,0 +1,76 @@
+# Keeps the public demo warm and honest.
+#
+# Two problems, one workflow:
+#
+# 1. Render's free plan spins a service down after ~15 minutes without traffic, and the cold start
+#    that follows takes the better part of a minute. A link on a CV that appears broken is worse
+#    than no link, so the demo is pinged often enough to stay up.
+#
+# 2. A public demo is a shared mutable object. The first visitor who marks Sarah Johnson as
+#    scheduled changes what every visitor after them sees, and after a day of that the demo no
+#    longer matches the demo script or the screenshots. Resetting hourly bounds that drift.
+#
+# GitHub's scheduled runners are best-effort and can be minutes late — which is fine for both
+# jobs here, and worth knowing before treating either as precise.
+name: Demo keepalive
+
+on:
+  schedule:
+    # Every 10 minutes: shorter than Render's ~15 minute idle timeout.
+    - cron: "*/10 * * * *"
+    # On the hour: reset the data.
+    - cron: "0 * * * *"
+  # So it can be triggered by hand right before a demo.
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: "Also reset the demo data"
+        type: boolean
+        default: false
+
+jobs:
+  ping:
+    name: Keep the API awake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the health endpoint
+        env:
+          API_URL: ${{ vars.DEMO_API_URL }}
+        run: |
+          if [ -z "${API_URL}" ]; then
+            echo "DEMO_API_URL is not set — see docs/DEPLOYMENT.md" >&2
+            exit 1
+          fi
+
+          # A cold start can take ~60s, so allow generous timeouts and retry rather than
+          # reporting a failure for a service that was merely asleep.
+          curl --fail --silent --show-error \
+               --retry 5 --retry-delay 15 --retry-all-errors \
+               --max-time 90 \
+               "${API_URL}/health"
+          echo
+
+  reset:
+    name: Reset the demo data
+    runs-on: ubuntu-latest
+    # Only on the hourly schedule, or when asked for explicitly. The 10-minute ping must never
+    # reset — wiping the data under a visitor mid-click is exactly what this is meant to avoid.
+    if: github.event.schedule == '0 * * * *' || inputs.reset
+    steps:
+      - name: Restore the documented demo state
+        env:
+          API_URL: ${{ vars.DEMO_API_URL }}
+          JOB_TOKEN: ${{ secrets.DEMO_JOB_TOKEN }}
+        run: |
+          if [ -z "${API_URL}" ] || [ -z "${JOB_TOKEN}" ]; then
+            echo "DEMO_API_URL or DEMO_JOB_TOKEN is not set — see docs/DEPLOYMENT.md" >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+               --retry 3 --retry-delay 20 --retry-all-errors \
+               --max-time 180 \
+               -X POST \
+               -H "X-Job-Token: ${JOB_TOKEN}" \
+               "${API_URL}/internal/jobs/reset-demo"
+          echo

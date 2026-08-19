@@ -1,0 +1,71 @@
+# Render Blueprint for the ClinicRecall public demo API.
+#
+# Render can read this file directly ("New > Blueprint"), which means the service is described
+# here in the repository rather than in a web form nobody can review or reproduce.
+#
+# Only the API runs here. The frontend is on Vercel and the database and auth are on Supabase —
+# see docs/DEPLOYMENT.md for how the three fit together.
+services:
+  - type: web
+    name: clinicrecall-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    plan: free
+    region: oregon
+
+    # Render polls this while deploying and will not cut traffic over until it answers. /health is
+    # a liveness check that touches nothing external, so it answers even when the database is
+    # unreachable — which is what makes it useful for telling "the app is down" apart from "the
+    # database is down".
+    healthCheckPath: /health
+
+    envVars:
+      - key: APP_ENV
+        value: production
+
+      # This deployment is the public demo, so the reset utility stays available. It is still a
+      # production deployment in every other respect. See the note on demo_mode in core/config.py.
+      - key: DEMO_MODE
+        value: "true"
+
+      - key: LOG_LEVEL
+        value: INFO
+
+      - key: EMAIL_PROVIDER
+        value: mock
+
+      - key: EMAIL_FROM_NAME
+        value: Green Valley Family Clinic
+
+      # Generated once by Render and then never shown again in plaintext. The hourly reset
+      # workflow needs the same value, so copy it into the repository secrets — DEPLOYMENT.md
+      # says where.
+      - key: JOB_TOKEN
+        generateValue: true
+
+      - key: UNSUBSCRIBE_TOKEN_SECRET
+        generateValue: true
+
+      # Set these by hand in the Render dashboard. They are marked sync:false so a Blueprint
+      # re-apply never overwrites them, and so no secret is committed to this file.
+      #
+      #   DATABASE_URL              Supabase > Project Settings > Database > Connection string,
+      #                             session pooler, with +psycopg after postgresql
+      #   SUPABASE_URL              https://<project-ref>.supabase.co
+      #   SUPABASE_ANON_KEY         Supabase > Project Settings > API
+      #   SUPABASE_SERVICE_ROLE_KEY Same page. Server-side only — never goes near Vercel.
+      #   WEB_ORIGIN                Your Vercel production URL, no trailing slash
+      #   EXTRA_WEB_ORIGINS         Optional, comma-separated, for Vercel preview URLs
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: EXTRA_WEB_ORIGINS
+        sync: false
