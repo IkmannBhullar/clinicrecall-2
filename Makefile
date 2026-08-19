@@ -51,15 +51,15 @@ help: ## Show the available commands
 
 .PHONY: setup
 setup: ## Install every dependency and prepare a fresh database (run once)
-	@echo "==> [1/6] Installing the Supabase CLI (skipped if already present)"
+	@echo "==> [1/7] Installing the Supabase CLI (skipped if already present)"
 	@bash scripts/install-supabase-cli.sh
-	@echo "==> [2/6] Creating .env files from .env.example (existing files are left alone)"
+	@echo "==> [2/7] Creating .env files from .env.example (existing files are left alone)"
 	@bash scripts/bootstrap-env.sh
-	@echo "==> [3/6] Installing Python dependencies (uv creates apps/api/.venv on Python 3.12)"
+	@echo "==> [3/7] Installing Python dependencies (uv creates apps/api/.venv on Python 3.12)"
 	@$(UV) sync --all-extras
-	@echo "==> [4/6] Installing Node dependencies"
+	@echo "==> [4/7] Installing Node dependencies"
 	@pnpm install --frozen-lockfile || pnpm install
-	@echo "==> [5/6] Starting the local Supabase stack (Postgres + Auth + Studio in Docker)"
+	@echo "==> [5/7] Starting the local Supabase stack (Postgres + Auth + Studio in Docker)"
 	@$(MAKE) supabase-start
 	@echo "==> [6/7] Applying database migrations"
 	@$(MAKE) migrate
