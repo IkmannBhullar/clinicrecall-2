@@ -166,3 +166,42 @@ def test_a_percent_encoded_password_survives_alembic_config() -> None:
     # And the undoubled form is genuinely rejected, which is why the escaping is required.
     with pytest.raises(ValueError, match="interpolation"):
         Config().set_main_option("sqlalchemy.url", url)
+
+
+# -------------------------------------------------------------------------------------------
+# The scheduled reset must not orphan the auth linkage
+# -------------------------------------------------------------------------------------------
+
+
+def test_the_scheduled_reset_relinks_supabase_accounts() -> None:
+    """The hourly reset must rebuild users.auth_user_id, not skip it.
+
+    reset_demo_data truncates the `users` table, and that table carries auth_user_id — the only
+    mapping from a Supabase login to an application user. Re-seeding without the linking step
+    writes a uuid5 placeholder there instead of the real Supabase id.
+
+    The resulting failure is silent in the worst way: sign-in still succeeds because Supabase
+    authenticates correctly, and then every API call returns "Your account is not set up for this
+    application" while the dashboard renders as an empty page. The deployed demo worked for
+    exactly one hour, until the first scheduled reset ran.
+
+    So this asserts on the call itself. There is no cheap runtime assertion available — the
+    linking needs a live Supabase admin API — but the defect was one keyword argument, and this
+    catches that keyword coming back.
+    """
+    import inspect
+
+    from app.routers import jobs
+
+    # Comments are stripped first: the fix's own explanatory comment names the bad argument, and
+    # matching that would make this test fail on the corrected code.
+    source = "\n".join(
+        line.split("#", 1)[0] for line in inspect.getsource(jobs.reset_demo).splitlines()
+    )
+
+    assert "create_auth_accounts=False" not in source, (
+        "The scheduled demo reset must re-link Supabase accounts. Passing "
+        "create_auth_accounts=False truncates users.auth_user_id and silently breaks sign-in "
+        "on the deployed demo."
+    )
+    assert "reset_demo_data()" in source

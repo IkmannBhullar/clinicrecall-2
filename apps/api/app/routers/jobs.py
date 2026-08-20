@@ -153,10 +153,22 @@ def reset_demo(
 
     from app.demo_reset import reset_demo_data
 
-    # Auth accounts are left alone. They are created once when the deployment is first seeded,
-    # and recreating them on every reset would mean calling the Supabase admin API twenty-four
-    # times a day to arrive back where it started.
-    seconds = reset_demo_data(create_auth_accounts=False)
+    # Auth accounts must be re-linked, not skipped.
+    #
+    # This previously passed create_auth_accounts=False, reasoning that the Supabase accounts
+    # already exist and recreating them hourly is wasted work. The accounts do survive — but the
+    # reset truncates the `users` table, and it is that table which carries auth_user_id, the
+    # only mapping from a Supabase login to an application user. Re-seeding without the linking
+    # step writes a deterministic uuid5 placeholder there instead of the real Supabase id.
+    #
+    # The failure that produces is quietly awful: signing in still succeeds, because Supabase
+    # authenticates fine, and then every API call returns "Your account is not set up for this
+    # application" and the dashboard renders empty. The demo looked healthy for exactly one hour
+    # after deployment, until the first scheduled reset ran.
+    #
+    # The linking step is idempotent — it finds the existing accounts and re-points them, rather
+    # than creating duplicates — so the cost is two admin API calls an hour.
+    seconds = reset_demo_data()
 
     logger.info("Reset the public demo data in %.1fs", seconds)
     return {"status": "ok", "seconds": round(seconds, 2)}
