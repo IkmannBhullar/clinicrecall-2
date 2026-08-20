@@ -32,7 +32,13 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Inject the real connection string, overriding anything alembic.ini might carry.
-config.set_main_option("sqlalchemy.url", settings.database_url)
+#
+# The percent signs are doubled because set_main_option writes into alembic.ini's ConfigParser,
+# which treats "%" as interpolation syntax. A hosted Postgres password containing a character that
+# must be percent-encoded in a URL — "@" becomes "%40", and Supabase generates passwords like this
+# routinely — otherwise raises "invalid interpolation syntax" before a single migration runs.
+# SQLAlchemy receives the original string, because ConfigParser un-doubles it on read.
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

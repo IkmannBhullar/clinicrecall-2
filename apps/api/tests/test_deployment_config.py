@@ -135,3 +135,34 @@ def test_a_valid_token_is_still_refused_when_demo_utilities_are_off(
 
     # 404 rather than 403 — a switched-off endpoint should not confirm that it exists.
     assert response.status_code == 404
+
+
+# -------------------------------------------------------------------------------------------
+# Alembic's config is a ConfigParser, and "%" means something to it
+# -------------------------------------------------------------------------------------------
+
+
+def test_a_percent_encoded_password_survives_alembic_config() -> None:
+    """A database URL containing "%" must reach SQLAlchemy unchanged.
+
+    ``migrations/env.py`` injects the connection string with ``set_main_option``, which writes
+    into alembic.ini's ConfigParser — and ConfigParser treats "%" as interpolation syntax. Hosted
+    Postgres passwords routinely contain characters that must be percent-encoded in a URL ("@"
+    becomes "%40"), so without doubling the percent signs, deploying against Supabase Cloud fails
+    with "invalid interpolation syntax" before a single migration runs.
+
+    This is a real failure that reached a real deployment, not a hypothetical.
+    """
+    from alembic.config import Config
+
+    url = "postgresql+psycopg://postgres.abc:Secret12%40@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
+
+    config = Config()
+    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+
+    # ConfigParser un-doubles on read, so SQLAlchemy sees the original percent-encoded password.
+    assert config.get_main_option("sqlalchemy.url") == url
+
+    # And the undoubled form is genuinely rejected, which is why the escaping is required.
+    with pytest.raises(ValueError, match="interpolation"):
+        Config().set_main_option("sqlalchemy.url", url)

@@ -212,7 +212,7 @@ Run `make` on its own to see the full list. The ones you will actually use:
 |---------|--------------|
 | `make setup` | One-time install and database preparation |
 | `make dev` | Start the whole stack |
-| `make seed` | Load the demo data (safe to run repeatedly) |
+| `make seed` | Load the demo data (safe to run repeatedly, but see the note below) |
 | `make samples` | Regenerate `docs/samples/*.csv` with dates relative to today |
 | `make demo-reset` | Wipe changes and restore pristine demo data, in under 30 seconds |
 | `make test` | Run the Python test suite |
@@ -221,6 +221,15 @@ Run `make` on its own to see the full list. The ones you will actually use:
 | `make fmt` | Auto-fix formatting |
 | `make typecheck` | Run mypy and the TypeScript compiler |
 | `make verify` | Run every quality gate — this is the definition of done |
+
+**`make seed` will not refresh the dates.** It is idempotent — every seeded row has a derived,
+stable ID, so re-running it leaves existing rows exactly as they are. That is what makes it safe
+to run repeatedly, but it also means a database seeded three days ago still holds three-day-old
+"sent this morning" timestamps, and the demo drifts.
+
+Use `make demo-reset` to put the dates back where they belong. It clears and reseeds, which takes
+about the same time and is the only command that regenerates the relative dates. If the Python
+tests fail on a seed assertion, this is almost always why.
 
 `make verify` is the one that matters. It exits 0 only when the migrations apply cleanly, the
 seed is idempotent, all linters and type checkers pass, every test passes, the Playwright
