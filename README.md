@@ -4,7 +4,7 @@
 for their annual appointment and sends them professional email reminders — then tracks what
 happened, so the clinic can see the appointments it recovered.
 
-**[▶ Try the live demo](#)** — sign-in credentials are pre-filled; just click Sign in.
+**[▶ Try the live demo](https://clinicrecall-2-web.vercel.app)** — sign-in credentials are pre-filled; just click Sign in.
 
 > **Demo data only.** Every patient record in this project is synthetic. Nothing here is, or
 > claims to be, HIPAA compliant. See [`docs/SECURITY.md`](docs/SECURITY.md) for what a real
